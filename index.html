@@ -709,6 +709,7 @@
         <div class="btn-row">
           <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
           <button class="btn btn-primary" onclick="runStep3()">Parse with Claude →</button>
+          <button class="btn btn-ghost" onclick="skipStep(2, 3)">Skip this step →</button>
         </div>
 
         <div id="resp2" class="response-box" style="display:none">
@@ -729,6 +730,9 @@
         <div class="panel-intro">
           <p>This step catches companies that are unlicensed, recently licensed, or too small to appear in official records. Run it <strong>after</strong> the license list is processed. Companies added here are flagged as web scrape source.</p>
         </div>
+
+        <label>Cities to Search (comma-separated)</label>
+        <input type="text" id="cities" placeholder="e.g. Denver, Aurora, Lakewood, Westminster, Thornton" />
 
         <label>Platforms to Search</label>
         <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:6px;">
@@ -751,6 +755,7 @@
         <div class="btn-row" style="margin-bottom:0;">
           <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
           <button class="btn btn-primary" onclick="runStep4a()">Generate Search Instructions →</button>
+          <button class="btn btn-ghost" onclick="skipStep(3, 4)">Skip this step →</button>
         </div>
 
         <div id="resp3a" class="response-box" style="display:none; margin-top:16px;">
@@ -769,6 +774,7 @@
 
         <div class="btn-row">
           <button class="btn btn-primary" onclick="runStep4b()">Process & Add to List →</button>
+          <button class="btn btn-ghost" onclick="skipStep(3, 4)">Skip & go to Filter →</button>
         </div>
 
         <div id="resp3" class="response-box" style="display:none">
@@ -912,6 +918,7 @@ let state = {
   industryNotes: '',
   geography: '',
   licenseCSV: '',
+  licenseResults: '',
   scrapeResults: '',
   companyList: [],
   trueCompanies: [],
@@ -957,6 +964,11 @@ function markDone(n) {
   el.classList.add('done');
   const num = el.querySelector('.step-num');
   num.textContent = '';
+}
+
+function skipStep(current, next) {
+  markDone(current);
+  goToStep(next);
 }
 
 // ─── FILE HANDLING ────────────────────────────────────────────────────────────
@@ -1208,23 +1220,27 @@ Return a structured summary, then a CSV table of the parsed companies with heade
 Company_Name,City,License_Number,License_Type,Employee_Signals,Notes`;
 
   const result = await callClaude(prompt, buildSystem(), 'badge2', 'respBody2', 'resp2');
-  if (result) { markDone(2); setTimeout(() => goToStep(3), 800); }
+  if (result) { state.licenseResults = result; markDone(2); setTimeout(() => goToStep(3), 800); }
 }
 
 // ─── STEP 4a: Generate Search Instructions ────────────────────────────────────
 async function runStep4a() {
+  const cities = document.getElementById('cities').value.trim();
   const platforms = [];
   if (document.getElementById('ckGmaps').checked) platforms.push('Google Maps');
   if (document.getElementById('ckYelp').checked) platforms.push('Yelp');
   if (document.getElementById('ckBBB').checked) platforms.push('BBB');
   if (document.getElementById('ckLinkedIn').checked) platforms.push('LinkedIn');
 
+  if (!cities) { alert('Please enter the cities to search.'); return; }
+
   const prompt = `Now help me supplement the license list with web research.
 Geography: ${state.geography}
+Cities to search: ${cities}
 Platforms: ${platforms.join(', ')}
 Industry: ${state.industry}
 
-Generate exact search queries for this geography across each platform that I can copy and paste.
+Generate exact search queries for each city + platform combination that I can copy and paste.
 Format them clearly so I know exactly what to type into each platform.
 Also tell me what signals to look for (employee count, ownership clues, etc.) when reviewing results.
 I will collect the results and paste them back for you to process.`;
@@ -1253,7 +1269,6 @@ Company_Name,City,Source,Employee_Signals,Ownership_Signal,Prelim_TRUE_FALSE,Not
 
   const result = await callClaude(prompt, buildSystem(), 'badge3', 'respBody3', 'resp3');
   if (result) {
-    // Auto-carry results into Step 5 filter notes
     state.scrapeResults = result;
     markDone(3);
     setTimeout(() => goToStep(4), 800);
@@ -1263,10 +1278,17 @@ Company_Name,City,Source,Employee_Signals,Ownership_Signal,Prelim_TRUE_FALSE,Not
 // ─── STEP 5: Apply Filter ─────────────────────────────────────────────────────
 async function runStep5() {
   const filterNotes = document.getElementById('filterNotes').value.trim();
-  const scrapeContext = state.scrapeResults ? `\nWeb scrape results to also include:\n${state.scrapeResults}` : '';
+  const licenseSection = state.licenseResults ? `LICENSE LIST DATA:\n${state.licenseResults}\n\n` : '';
+  const scrapeSection = state.scrapeResults ? `WEB SCRAPE DATA:\n${state.scrapeResults}\n\n` : '';
 
-  const prompt = `Apply the ironclad filter to every company on our master list — including any from the license list and any from the web scrape below.
-${scrapeContext}
+  if (!licenseSection && !scrapeSection) {
+    alert('No company data found. Please complete Step 3 (license list) or Step 4 (web scrape) first, or paste companies manually.');
+    return;
+  }
+
+  const prompt = `Apply the ironclad filter to every company in the data below.
+
+${licenseSection}${scrapeSection}
 
 TRUE = ALL three pass:
 1. Confirmed bootstrapped / independently owned
@@ -1276,8 +1298,7 @@ TRUE = ALL three pass:
 FALSE = any one fails. Add a reason in Notes.
 Do NOT delete FALSE companies — I need to see the PE landscape.
 
-Color coding for Ownership (note in the Ownership column):
-BOOTSTRAPPED, PE-BACKED, NATIONAL, or FRANCHISE
+Ownership column values: BOOTSTRAPPED, PE-BACKED, NATIONAL, or FRANCHISE
 
 ${filterNotes ? 'Additional filter rules: ' + filterNotes : ''}
 
