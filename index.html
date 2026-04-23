@@ -1250,12 +1250,14 @@ async function runStep4a() {
       : '';
 
     const prompt = `Search the web for ${state.industry} companies in ${state.geography}. Round ${round}.
-Use multiple web searches to find as many independent/bootstrapped companies as possible.
-Do not include national chains or PE-backed companies.
-${existingNames ? `Do not repeat these already found: ${existingNames}` : ''}
-Return up to 30 NEW companies as CSV with ONLY these headers (no extra text before or after):
-Company_Name,City,Website,Employee_Signals,Ownership_Signal,Source
-If no new companies found, return only the header row.`;
+${existingNames ? `Skip these already found: ${existingNames}` : ''}
+
+Search then extract ONLY: company name and city. Discard all other webpage content.
+Independent/bootstrapped companies only, no national chains.
+
+Return up to 30 companies as CSV, nothing else:
+Company_Name,City
+If none found, return only the header.`;
 
     setBadge('badge3a', 'loading', `<span class="dots"><span>.</span><span>.</span><span>.</span></span> Round ${round}`);
     document.getElementById('respBody3a').textContent = `Round ${round} — searching…`;
