@@ -751,7 +751,7 @@
 
         <div class="btn-row" style="margin-bottom:0;">
           <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
-          <button class="btn btn-primary" onclick="runStep4a()">Search for Companies →</button>
+          <button class="btn btn-primary" onclick="runStep4a()">Search & Auto-Filter →</button>
           <button class="btn btn-ghost" onclick="skipStep(3, 4)">Skip this step →</button>
         </div>
 
@@ -764,7 +764,13 @@
         </div>
 
         <div id="scrapeNextBtn" style="display:none; margin-top:16px;">
-          <button class="btn btn-primary" onclick="goToStep(4)">Go to Filter → </button>
+          <div style="color:var(--text2);font-size:13px;margin-bottom:12px;">
+            Total companies collected: <span class="count-badge" id="scrapeCount">0</span>
+          </div>
+          <div class="btn-row" style="margin-top:0;">
+            <button class="btn btn-secondary" onclick="runStep4a()">Search for More →</button>
+            <button class="btn btn-primary" onclick="goToStep(4)">Go to Filter →</button>
+          </div>
         </div>
 
         <div id="resp3" class="response-box" style="display:none">
@@ -1027,19 +1033,20 @@ function parseLicenseFile() {
 
 // ─── CLAUDE API ───────────────────────────────────────────────────────────────
 async function callClaude(userMessage, systemPrompt, badgeId, bodyId, respBoxId) {
-  if (!state.apiKey) { alert('Please enter your Anthropic API key at the top of the page.'); return null; }
-
   document.getElementById(respBoxId).style.display = 'block';
   setBadge(badgeId, 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
   setStatus('loading', 'Running…');
   document.getElementById(bodyId).textContent = '';
 
-  // Add to conversation
+  // Add to conversation, keep only last 4 messages to avoid token limits
   state.conversationHistory.push({ role: 'user', content: userMessage });
+  if (state.conversationHistory.length > 4) {
+    state.conversationHistory = state.conversationHistory.slice(-4);
+  }
 
   const body = {
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 4000,
+    max_tokens: 2000,
     tools: [{ type: 'web_search_20250305', name: 'web_search' }],
     system: systemPrompt,
     messages: state.conversationHistory,
@@ -1214,7 +1221,7 @@ Company_Name,City,License_Number,License_Type,Employee_Signals,Notes`;
   if (result) { state.licenseResults = result; markDone(2); setTimeout(() => goToStep(3), 800); }
 }
 
-// ─── STEP 4a: Web Scrape ─────────────────────────────────────────────────────
+// ─── STEP 4a: Web Scrape (auto-loop) ─────────────────────────────────────────
 async function runStep4a() {
   const platforms = [];
   if (document.getElementById('ckGmaps').checked) platforms.push('Google Maps');
@@ -1222,28 +1229,103 @@ async function runStep4a() {
   if (document.getElementById('ckBBB').checked) platforms.push('BBB');
   if (document.getElementById('ckLinkedIn').checked) platforms.push('LinkedIn');
 
-  const prompt = `Search the web right now for ${state.industry} companies in ${state.geography}.
+  state.scrapeResults = '';
+  document.getElementById('scrapeNextBtn').style.display = 'block';
+  document.getElementById('scrapeCount').textContent = '0';
+  document.getElementById('resp3a').style.display = 'block';
 
-Search across these platforms: ${platforms.join(', ')}
+  let round = 0;
+  let consecutiveEmpty = 0;
 
-For each company you find:
-- Company name
-- City
-- Website if available
-- Estimated employee count if available
-- Any ownership signals (independent, franchise, PE-backed)
+  while (consecutiveEmpty < 2 && round < 10) {
+    round++;
+    const existingNames = state.scrapeResults
+      ? state.scrapeResults.split('\n')
+          .filter(l => l.trim() && !l.toLowerCase().startsWith('company_name'))
+          .slice(0, 20)
+          .map(l => l.split(',')[0])
+          .join(', ')
+      : '';
 
-Search thoroughly and return ALL companies you find as a CSV with headers:
-Company_Name,City,Website,Employee_Signals,Ownership_Signal,Source,Notes
+    const prompt = `Search the web for ${state.industry} companies in ${state.geography}. Round ${round}.
+Find independent/bootstrapped companies only, not national chains.
+${existingNames ? `Do NOT repeat these already found: ${existingNames}` : ''}
 
-Do not generate instructions — actually search and return real companies now.`;
+Return up to 30 NEW companies as CSV with ONLY these headers (no extra text before or after):
+Company_Name,City,Website,Employee_Signals,Ownership_Signal,Source
 
-  const result = await callClaude(prompt, buildSystem(), 'badge3a', 'respBody3a', 'resp3a');
-  if (result) {
-    state.scrapeResults = result;
-    markDone(3);
-    document.getElementById('scrapeNextBtn').style.display = 'block';
+If you cannot find any new companies, return only the header row.`;
+
+    setBadge('badge3a', 'loading', `<span class="dots"><span>.</span><span>.</span><span>.</span></span> Round ${round}`);
+    document.getElementById('respBody3a').textContent = `Searching round ${round}…`;
+
+    // Use fresh call each round to avoid bloating history
+    const body = {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      system: buildSystem(),
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    try {
+      const resp = await fetch('https://acquisition-target-builder.vercel.app/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      const result = data.content.map(b => b.text || '').join('');
+
+      const newLines = result.split('\n').filter(l => l.trim() && l.includes(','));
+      const dataLines = newLines.filter(l => !l.toLowerCase().startsWith('company_name'));
+
+      if (dataLines.length === 0) {
+        consecutiveEmpty++;
+      } else {
+        consecutiveEmpty = 0;
+        if (state.scrapeResults) {
+          state.scrapeResults += '\n' + dataLines.join('\n');
+        } else {
+          const header = newLines.find(l => l.toLowerCase().startsWith('company_name')) || 'Company_Name,City,Website,Employee_Signals,Ownership_Signal,Source';
+          state.scrapeResults = header + '\n' + dataLines.join('\n');
+        }
+        const count = state.scrapeResults.split('\n').filter(l => l.trim() && !l.toLowerCase().startsWith('company_name')).length;
+        document.getElementById('scrapeCount').textContent = count;
+        document.getElementById('respBody3a').textContent = `Round ${round} complete — ${count} companies collected so far. Searching for more…`;
+      }
+
+      // Wait 15 seconds between rounds to avoid rate limits
+      await new Promise(r => setTimeout(r, 15000));
+      document.getElementById('respBody3a').textContent += ` Waiting before next search…`;
+
+    } catch (err) {
+      if (err.message.includes('rate limit')) {
+        document.getElementById('respBody3a').textContent += ` Rate limit hit — waiting 60 seconds before retrying…`;
+        await new Promise(r => setTimeout(r, 60000));
+        round--; // retry this round
+        consecutiveEmpty = 0;
+      } else {
+        document.getElementById('respBody3a').textContent = `Round ${round} error: ${err.message}. Moving to filter with what we have.`;
+        break;
+      }
+    }
   }
+
+  const finalCount = state.scrapeResults
+    ? state.scrapeResults.split('\n').filter(l => l.trim() && !l.toLowerCase().startsWith('company_name')).length
+    : 0;
+
+  setBadge('badge3a', 'done', '✓ Done');
+  document.getElementById('respBody3a').textContent = `Search complete — ${finalCount} companies found. Running filter now…`;
+  markDone(3);
+
+  // Auto-run filter
+  setTimeout(() => {
+    goToStep(4);
+    setTimeout(() => runStep5(), 500);
+  }, 1000);
 }
 
 // ─── STEP 4b: Process Scrape Results ─────────────────────────────────────────
