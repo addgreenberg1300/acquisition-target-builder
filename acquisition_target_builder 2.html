@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acquisition Target Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0e0c;
+    --surface: #181714;
+    --surface2: #211f1b;
+    --border: #2e2b26;
+    --border2: #3d3930;
+    --gold: #c9a84c;
+    --gold2: #e8c97a;
+    --green: #4caf7d;
+    --red: #e05555;
+    --blue: #5b9bd5;
+    --text: #e8e3da;
+    --text2: #9e9891;
+    --text3: #5c5851;
+    --radius: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* LAYOUT */
+  .app { display: flex; min-height: 100vh; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 240px;
+    min-width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  .logo {
+    padding: 28px 20px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 20px;
+    color: var(--gold2);
+    line-height: 1.2;
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 4px;
+  }
+
+  .steps-nav {
+    padding: 16px 0;
+    flex: 1;
+  }
+
+  .step-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-left: 2px solid transparent;
+  }
+
+  .step-nav-item:hover { background: var(--surface2); }
+  .step-nav-item.active {
+    background: var(--surface2);
+    border-left-color: var(--gold);
+  }
+
+  .step-num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .step-nav-item.active .step-num, .step-nav-item.done .step-num {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: #000;
+  }
+
+  .step-nav-item.done .step-num::after { content: '✓'; }
+  .step-nav-item.done .step-num { font-size: 11px; }
+
+  .step-nav-label {
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.3;
+  }
+
+  .step-nav-item.active .step-nav-label { color: var(--text); }
+
+  .sidebar-bottom {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* MAIN */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .topbar-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 22px;
+    color: var(--text);
+  }
+
+  .topbar-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  .content {
+    padding: 32px;
+    flex: 1;
+    max-width: 820px;
+  }
+
+  /* STEP PANELS */
+  .step-panel { display: none; }
+  .step-panel.active { display: block; }
+
+  .panel-intro {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .panel-intro p {
+    color: var(--text2);
+    line-height: 1.6;
+    font-size: 13px;
+  }
+
+  .panel-intro strong { color: var(--gold2); font-weight: 500; }
+
+  /* FORM ELEMENTS */
+  label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    margin-bottom: 6px;
+    margin-top: 20px;
+  }
+
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"], input[type="password"], textarea, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input:focus, textarea:focus, select:focus { border-color: var(--gold); }
+  textarea { resize: vertical; min-height: 100px; line-height: 1.5; }
+
+  .file-drop {
+    border: 1px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 28px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--surface2);
+    position: relative;
+  }
+
+  .file-drop:hover, .file-drop.drag-over {
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.04);
+  }
+
+  .file-drop input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .file-drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .file-drop-text { color: var(--text2); font-size: 13px; }
+  .file-drop-hint { color: var(--text3); font-size: 11px; margin-top: 4px; }
+  .file-name { color: var(--gold2); font-size: 12px; margin-top: 8px; font-family: 'DM Mono', monospace; }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--gold);
+    color: #000;
+  }
+  .btn-primary:hover { background: var(--gold2); }
+  .btn-primary:disabled { background: var(--border2); color: var(--text3); cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text2);
+    border: 1px solid var(--border2);
+  }
+  .btn-secondary:hover { border-color: var(--border); color: var(--text); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text3);
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .btn-ghost:hover { color: var(--text); }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 24px;
+  }
+
+  /* RESPONSE AREA */
+  .response-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 20px;
+  }
+
+  .response-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .response-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gold);
+  }
+
+  .response-body {
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+    max-height: 500px;
+    overflow-y: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+  }
+
+  /* STATUS BADGES */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .badge-idle { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+  .badge-loading { background: rgba(201,168,76,0.1); color: var(--gold); border: 1px solid rgba(201,168,76,0.3); }
+  .badge-done { background: rgba(76,175,125,0.1); color: var(--green); border: 1px solid rgba(76,175,125,0.3); }
+  .badge-error { background: rgba(224,85,85,0.1); color: var(--red); border: 1px solid rgba(224,85,85,0.3); }
+
+  /* LOADING DOTS */
+  @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+  .dots span { animation: blink 1.4s infinite; display: inline-block; }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  /* DATA TABLE */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 16px;
+  }
+
+  .data-table th {
+    background: var(--surface2);
+    padding: 8px 12px;
+    text-align: left;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .data-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+  }
+
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .tag-true { color: var(--green); font-family: 'DM Mono', monospace; font-size: 11px; }
+  .tag-false { color: var(--red); font-family: 'DM Mono', monospace; font-size: 11px; }
+  .tag-bootstrap { color: var(--green); }
+  .tag-pe { color: var(--red); }
+  .tag-national { color: #e08855; }
+  .tag-franchise { color: var(--gold); }
+
+  /* CARD */
+  .card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .card-body { color: var(--text2); font-size: 13px; line-height: 1.6; }
+
+  /* DIVIDER */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 28px 0;
+  }
+
+  /* API KEY */
+  .api-key-banner {
+    background: rgba(201,168,76,0.06);
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .api-key-icon { font-size: 20px; flex-shrink: 0; }
+
+  .api-key-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex: 1;
+  }
+
+  .api-key-input-row input {
+    flex: 1;
+    margin: 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+  }
+
+  /* STEP PROGRESS */
+  .step-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .step-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(201,168,76,0.1);
+    border: 1px solid rgba(201,168,76,0.2);
+    padding: 3px 8px;
+    border-radius: 20px;
+  }
+
+  .step-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 26px;
+    color: var(--text);
+  }
+
+  /* SCROLL */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* TOOLTIP */
+  .tip {
+    display: flex;
+    gap: 10px;
+    background: rgba(91,155,213,0.07);
+    border: 1px solid rgba(91,155,213,0.2);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #7ab3d9;
+    line-height: 1.5;
+  }
+
+  /* EXPORT BAR */
+  .export-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 20px;
+  }
+
+  .export-bar-label { font-size: 12px; color: var(--text2); flex: 1; }
+
+  /* COMPANY COUNT */
+  .count-badge {
+    display: inline-flex;
+    padding: 2px 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--gold2);
+    margin-left: 8px;
+  }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 20px 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* CSV preview */
+  .csv-preview {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title">Target<br>Builder</div>
+      <div class="logo-sub">Search Fund Acquisition Tool</div>
+    </div>
+    <nav class="steps-nav" id="stepsNav">
+      <div class="step-nav-item active" onclick="goToStep(0)" id="nav0">
+        <div class="step-num">1</div>
+        <div class="step-nav-label">Industry Research</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(1)" id="nav1">
+        <div class="step-num">2</div>
+        <div class="step-nav-label">Define Geography</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(2)" id="nav2">
+        <div class="step-num">3</div>
+        <div class="step-nav-label">License List</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(3)" id="nav3">
+        <div class="step-num">4</div>
+        <div class="step-nav-label">Web Scrape Gaps</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(4)" id="nav4">
+        <div class="step-num">5</div>
+        <div class="step-nav-label">Apply Filter</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(5)" id="nav5">
+        <div class="step-num">6</div>
+        <div class="step-nav-label">Decision Makers</div>
+      </div>
+    </nav>
+    <div class="sidebar-bottom">
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;">
+        All data stays in your browser.<br>Nothing is stored externally.
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="topbarTitle">Industry Research</div>
+        <div class="topbar-meta" id="topbarMeta">Step 1 of 6</div>
+      </div>
+      <div id="topbarStatus" class="badge badge-idle">Idle</div>
+    </div>
+
+    <div class="content">
+
+      <!-- API KEY BANNER -->
+      <div class="api-key-banner">
+        <div class="api-key-icon">🔑</div>
+        <div class="api-key-input-row">
+          <input type="password" id="apiKey" placeholder="sk-ant-api... — your Anthropic API key" />
+          <button class="btn btn-secondary" onclick="saveKey()">Save</button>
+        </div>
+      </div>
+
+      <!-- STEP 1: Industry Research -->
+      <div class="step-panel active" id="panel0">
+        <div class="step-header">
+          <span class="step-tag">Step 01</span>
+          <h2 class="step-title">Industry Research</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Upload or paste everything you already know about the industry. The more context you give Claude here, the better every step that follows performs. <strong>Do not skip this step.</strong></p>
+        </div>
+
+        <label>Industry Name</label>
+        <input type="text" id="industryName" placeholder="e.g. Commercial HVAC, Specialty Plumbing, Industrial Cleaning…" />
+
+        <label>Research Notes (paste anything — call transcripts, articles, your own notes)</label>
+        <textarea id="industryNotes" rows="8" placeholder="Paste your research here. No minimum length — rough bullets are fine."></textarea>
+
+        <label>Upload Research Files (PDF, Word, CSV — optional)</label>
+        <div class="file-drop" id="researchDrop">
+          <input type="file" id="researchFile" multiple accept=".pdf,.txt,.csv,.docx" onchange="handleFileSelect('researchFile','researchFileName')" />
+          <div class="file-drop-icon">📎</div>
+          <div class="file-drop-text">Drop files here or click to browse</div>
+          <div class="file-drop-hint">PDF, TXT, CSV accepted</div>
+          <div class="file-name" id="researchFileName"></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runStep1()">Brief Claude on Industry →</button>
+        </div>
+
+        <div id="resp0" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Claude's Understanding</span>
+            <span class="badge badge-idle" id="badge0">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody0"></div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Geography -->
+      <div class="step-panel" id="panel1">
+        <div class="step-header">
+          <span class="step-tag">Step 02</span>
+          <h2 class="step-title">Define Geography</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Be specific. Claude will apply this as a hard filter — any company not headquartered in this geography will automatically be marked <strong>FALSE</strong>, regardless of other criteria.</p>
+        </div>
+
+        <label>Target Geography</label>
+        <input type="text" id="geography" placeholder="e.g. Greater Denver Metro, CO — or Dallas County, TX — or State of Ohio" />
+
+        <label>Notes on Geography (optional — e.g. include/exclude specific counties)</label>
+        <textarea id="geoNotes" rows="3" placeholder="Any extra context about borders or focus areas…"></textarea>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goToStep(0)">← Back</button>
+          <button class="btn btn-primary" onclick="runStep2()">Set Geography →</button>
+        </div>
+
+        <div id="resp1" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Geography Confirmed</span>
+            <span class="badge badge-idle" id="badge1">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody1"></div>
+        </div>
+      </div>
+
+      <!-- STEP 3: License List -->
+      <div class="step-panel" id="panel2">
+        <div class="step-header">
+          <span class="step-tag">Step 03</span>
+          <h2 class="step-title">License List</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Official state license databases are more complete and more accurate than web scraping. <strong>Always try this first.</strong> Claude will tell you if a public database exists — then you download the file and upload it here.</p>
+        </div>
+
+        <div class="btn-row" style="margin-top:0; margin-bottom:0;">
+          <button class="btn btn-secondary" onclick="findLicenseDB()">🔎 Ask Claude If a Database Exists</button>
+        </div>
+
+        <div id="resp2a" class="response-box" style="display:none; margin-top:16px;">
+          <div class="response-header">
+            <span class="response-label">License Database Info</span>
+            <span class="badge badge-idle" id="badge2a">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody2a"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-title">Upload the License File</div>
+        <p style="color:var(--text2);font-size:13px;">Once you've downloaded the CSV or PDF from the state website, upload it here.</p>
+
+        <label style="margin-top:12px;">License List File</label>
+        <div class="file-drop">
+          <input type="file" id="licenseFile" accept=".csv,.pdf,.xlsx,.xls,.txt" onchange="handleFileSelect('licenseFile','licenseFileName');parseLicenseFile()" />
+          <div class="file-drop-icon">📋</div>
+          <div class="file-drop-text">Drop the license CSV/PDF here</div>
+          <div class="file-drop-hint">CSV preferred — uses far fewer tokens than PDF</div>
+          <div class="file-name" id="licenseFileName"></div>
+        </div>
+
+        <div id="rawPreviewWrap" style="display:none">
+          <div class="section-title">File Preview <span class="count-badge" id="rowCountBadge">0 rows</span></div>
+          <div class="csv-preview" id="rawPreview"></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+          <button class="btn btn-primary" onclick="runStep3()">Parse with Claude →</button>
+          <button class="btn btn-ghost" onclick="skipStep(2, 3)">Skip this step →</button>
+        </div>
+
+        <div id="resp2" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Parsed Companies</span>
+            <span class="badge badge-idle" id="badge2">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody2"></div>
+        </div>
+      </div>
+
+      <!-- STEP 4: Web Scrape -->
+      <div class="step-panel" id="panel3">
+        <div class="step-header">
+          <span class="step-tag">Step 04</span>
+          <h2 class="step-title">Web Scrape Gaps</h2>
+        </div>
+        <div class="panel-intro">
+          <p>This step catches companies that are unlicensed, recently licensed, or too small to appear in official records. Run it <strong>after</strong> the license list is processed. Companies added here are flagged as web scrape source.</p>
+        </div>
+
+        <label>Cities to Search (comma-separated)</label>
+        <input type="text" id="cities" placeholder="e.g. Denver, Aurora, Lakewood, Westminster, Thornton" />
+
+        <label>Platforms to Search</label>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:6px;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;color:var(--text2);cursor:pointer;">
+            <input type="checkbox" id="ckGmaps" checked> Google Maps
+          </label>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;color:var(--text2);cursor:pointer;">
+            <input type="checkbox" id="ckYelp" checked> Yelp
+          </label>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;color:var(--text2);cursor:pointer;">
+            <input type="checkbox" id="ckBBB" checked> BBB
+          </label>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;color:var(--text2);cursor:pointer;">
+            <input type="checkbox" id="ckLinkedIn" checked> LinkedIn
+          </label>
+        </div>
+
+        <div class="tip">💡 Claude cannot actually browse the web for you — instead it generates the exact search queries and instructions you need so you can quickly gather the data, then return and paste it below.</div>
+
+        <div class="btn-row" style="margin-bottom:0;">
+          <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+          <button class="btn btn-primary" onclick="runStep4a()">Generate Search Instructions →</button>
+          <button class="btn btn-ghost" onclick="skipStep(3, 4)">Skip this step →</button>
+        </div>
+
+        <div id="resp3a" class="response-box" style="display:none; margin-top:16px;">
+          <div class="response-header">
+            <span class="response-label">Search Instructions</span>
+            <span class="badge badge-idle" id="badge3a">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody3a"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-title">Paste Web Scrape Results</div>
+        <p style="color:var(--text2);font-size:13px;">Paste any raw data you collected from those searches here, then let Claude process it.</p>
+        <textarea id="scrapeResults" rows="8" placeholder="Company Name, City, Website, Phone, Employee guess…&#10;Paste whatever you found — even messy copy-paste is fine."></textarea>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runStep4b()">Process & Add to List →</button>
+          <button class="btn btn-ghost" onclick="skipStep(3, 4)">Skip & go to Filter →</button>
+        </div>
+
+        <div id="resp3" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Supplemental Companies Added</span>
+            <span class="badge badge-idle" id="badge3">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody3"></div>
+        </div>
+      </div>
+
+      <!-- STEP 5: Filter -->
+      <div class="step-panel" id="panel4">
+        <div class="step-header">
+          <span class="step-tag">Step 05</span>
+          <h2 class="step-title">Apply Ironclad Filter</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Every company gets <strong style="color:var(--green)">TRUE</strong> or <strong style="color:var(--red)">FALSE</strong>. TRUE requires all three: confirmed bootstrapped, employee range overlaps 20–200, and headquartered in your geography. <strong>FALSE companies are NOT deleted</strong> — you need to see the PE landscape.</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;">
+          <div class="card">
+            <div class="card-title" style="color:var(--green)">✓ TRUE — All three required</div>
+            <div class="card-body">
+              1. Confirmed bootstrapped / independently owned<br>
+              2. Employee range overlaps 20–200<br>
+              3. Headquartered in your geography
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="color:var(--red)">✗ FALSE — Any one fails</div>
+            <div class="card-body">
+              PE-backed, national, franchise<br>
+              Under 20 employees<br>
+              Ownership unverified<br>
+              Wrong geography
+            </div>
+          </div>
+        </div>
+
+        <label style="margin-top:20px;">Additional Filter Notes (optional)</label>
+        <textarea id="filterNotes" rows="3" placeholder="Any custom rules — e.g. also exclude companies under 5 years old, or flag franchise sub-brands…"></textarea>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
+          <button class="btn btn-primary" onclick="runStep5()">Apply Filter →</button>
+        </div>
+
+        <div id="resp4" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Filtered Company List</span>
+            <span class="badge badge-idle" id="badge4">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody4"></div>
+        </div>
+
+        <div id="filterTableWrap" style="display:none;margin-top:20px;">
+          <div class="section-title">
+            Results
+            <span class="count-badge" id="trueCount">0 TRUE</span>
+            <span class="count-badge" id="falseCount">0 FALSE</span>
+          </div>
+          <div class="csv-preview">
+            <table class="data-table" id="filterTable">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="export-bar">
+            <div class="export-bar-label">Ready to export the full filtered list to Excel</div>
+            <button class="btn btn-primary" onclick="exportToExcel()">⬇ Export Excel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 6: Decision Makers -->
+      <div class="step-panel" id="panel5">
+        <div class="step-header">
+          <span class="step-tag">Step 06</span>
+          <h2 class="step-title">Decision Makers</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Finds CEO/owner contact info for TRUE companies only, in two passes. <strong>Pass 1</strong> is fast — checks website, LinkedIn, and one Google search. <strong>Pass 2</strong> digs deeper only for companies Pass 1 couldn't resolve. Only confirmed public sources are used — no guessing.</p>
+        </div>
+
+        <label>TRUE Companies (paste names, one per line, or as CSV)</label>
+        <textarea id="trueCompanies" rows="10" placeholder="Acme Plumbing — Denver, CO&#10;Colorado HVAC Solutions — Aurora, CO&#10;Rocky Mountain Fire Protection — Lakewood, CO&#10;…"></textarea>
+
+        <div class="tip">💡 Batch 10–15 companies at a time for best results. Start a fresh session for this step if you've run Steps 1–5 in the same window (paste results above).</div>
+
+        <div class="section-title" style="margin-top:20px;">Pass 1 — Quick Sweep</div>
+
+        <div class="btn-row" style="margin-top:0;">
+          <button class="btn btn-secondary" onclick="goToStep(4)">← Back</button>
+          <button class="btn btn-primary" onclick="runPass1()">Run Pass 1 →</button>
+        </div>
+
+        <div id="resp5a" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Pass 1 Results</span>
+            <span class="badge badge-idle" id="badge5a">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody5a"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-title">Pass 2 — Escalation <span style="color:var(--text3);font-size:11px;font-weight:400;margin-left:4px;">(run only if needed)</span></div>
+
+        <label>Escalated Companies (paste companies where Pass 1 came back empty)</label>
+        <textarea id="escalatedCompanies" rows="6" placeholder="Companies marked ESCALATE from Pass 1…"></textarea>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runPass2()">Run Pass 2 →</button>
+        </div>
+
+        <div id="resp5b" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Pass 2 Results</span>
+            <span class="badge badge-idle" id="badge5b">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody5b"></div>
+        </div>
+
+        <div class="export-bar" style="margin-top:20px;">
+          <div class="export-bar-label">Export Decision Maker Contacts tab</div>
+          <button class="btn btn-primary" onclick="exportContacts()">⬇ Export Contacts Excel</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let state = {
+  apiKey: '',
+  industry: '',
+  industryNotes: '',
+  geography: '',
+  licenseCSV: '',
+  companyList: [],      // main list of companies
+  trueCompanies: [],    // filtered TRUE companies
+  contactResults: [],
+  conversationHistory: [], // full multi-turn history
+};
+
+// ─── API KEY ──────────────────────────────────────────────────────────────────
+function saveKey() {
+  state.apiKey = document.getElementById('apiKey').value.trim();
+  if (state.apiKey) {
+    document.getElementById('apiKey').style.borderColor = 'var(--green)';
+    setTimeout(() => document.getElementById('apiKey').style.borderColor = '', 1500);
+  }
+}
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────────────
+const titles = [
+  ['Industry Research', 'Step 1 of 6'],
+  ['Define Geography', 'Step 2 of 6'],
+  ['License List', 'Step 3 of 6'],
+  ['Web Scrape Gaps', 'Step 4 of 6'],
+  ['Apply Filter', 'Step 5 of 6'],
+  ['Decision Makers', 'Step 6 of 6'],
+];
+
+let currentStep = 0;
+
+function goToStep(n) {
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.step-nav-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('panel' + n).classList.add('active');
+  document.getElementById('nav' + n).classList.add('active');
+  document.getElementById('topbarTitle').textContent = titles[n][0];
+  document.getElementById('topbarMeta').textContent = titles[n][1];
+  currentStep = n;
+  window.scrollTo(0,0);
+}
+
+function markDone(n) {
+  const el = document.getElementById('nav' + n);
+  el.classList.remove('active');
+  el.classList.add('done');
+  const num = el.querySelector('.step-num');
+  num.textContent = '';
+}
+
+function skipStep(current, next) {
+  markDone(current);
+  goToStep(next);
+}
+
+// ─── FILE HANDLING ────────────────────────────────────────────────────────────
+function handleFileSelect(inputId, labelId) {
+  const files = document.getElementById(inputId).files;
+  if (files.length > 0) {
+    document.getElementById(labelId).textContent = Array.from(files).map(f => f.name).join(', ');
+  }
+}
+
+async function readFileAsText(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+      r.readAsText(file);
+    } else {
+      r.readAsDataURL(file);
+    }
+  });
+}
+
+function parseLicenseFile() {
+  const file = document.getElementById('licenseFile').files[0];
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+      const text = e.target.result;
+      state.licenseCSV = text;
+      const lines = text.split('\n').filter(l => l.trim());
+      document.getElementById('rowCountBadge').textContent = (lines.length - 1) + ' rows';
+      // Build preview table
+      const rows = lines.slice(0, 6).map(l => l.split(','));
+      let html = '<table class="data-table"><thead><tr>';
+      (rows[0] || []).forEach(h => html += `<th>${h}</th>`);
+      html += '</tr></thead><tbody>';
+      rows.slice(1).forEach(row => {
+        html += '<tr>' + row.map(c => `<td>${c}</td>`).join('') + '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('rawPreview').innerHTML = html;
+      document.getElementById('rawPreviewWrap').style.display = 'block';
+    } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      state.licenseCSV = csv;
+      const lines = csv.split('\n').filter(l=>l.trim());
+      document.getElementById('rowCountBadge').textContent = (lines.length-1) + ' rows';
+      const rows = lines.slice(0,6).map(l=>l.split(','));
+      let html = '<table class="data-table"><thead><tr>';
+      (rows[0]||[]).forEach(h=>html+=`<th>${h}</th>`);
+      html += '</tr></thead><tbody>';
+      rows.slice(1).forEach(row=>{html+='<tr>'+row.map(c=>`<td>${c}</td>`).join('')+'</tr>';});
+      html += '</tbody></table>';
+      document.getElementById('rawPreview').innerHTML = html;
+      document.getElementById('rawPreviewWrap').style.display = 'block';
+    }
+  };
+  if (file.name.endsWith('.xlsx')||file.name.endsWith('.xls')) r.readAsArrayBuffer(file);
+  else r.readAsText(file);
+}
+
+// ─── CLAUDE API ───────────────────────────────────────────────────────────────
+async function callClaude(userMessage, systemPrompt, badgeId, bodyId, respBoxId) {
+  if (!state.apiKey) { alert('Please enter your Anthropic API key at the top of the page.'); return null; }
+
+  document.getElementById(respBoxId).style.display = 'block';
+  setBadge(badgeId, 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
+  setStatus('loading', 'Running…');
+  document.getElementById(bodyId).textContent = '';
+
+  // Add to conversation
+  state.conversationHistory.push({ role: 'user', content: userMessage });
+
+  const body = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4000,
+    system: systemPrompt,
+    messages: state.conversationHistory,
+  };
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.content.map(b => b.text || '').join('');
+    state.conversationHistory.push({ role: 'assistant', content: text });
+    document.getElementById(bodyId).textContent = text;
+    setBadge(badgeId, 'done', '✓ Done');
+    setStatus('done', 'Complete');
+    return text;
+  } catch (err) {
+    document.getElementById(bodyId).textContent = 'Error: ' + err.message;
+    setBadge(badgeId, 'error', '✗ Error');
+    setStatus('idle', 'Idle');
+    return null;
+  }
+}
+
+// Fresh call — does NOT add to conversation history (for isolated queries)
+async function callClaudeFresh(userMessage, systemPrompt, badgeId, bodyId, respBoxId) {
+  if (!state.apiKey) { alert('Please enter your Anthropic API key at the top of the page.'); return null; }
+  document.getElementById(respBoxId).style.display = 'block';
+  setBadge(badgeId, 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
+  setStatus('loading', 'Running…');
+  document.getElementById(bodyId).textContent = '';
+
+  const body = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+  };
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.content.map(b => b.text || '').join('');
+    document.getElementById(bodyId).textContent = text;
+    setBadge(badgeId, 'done', '✓ Done');
+    setStatus('done', 'Complete');
+    return text;
+  } catch (err) {
+    document.getElementById(bodyId).textContent = 'Error: ' + err.message;
+    setBadge(badgeId, 'error', '✗ Error');
+    setStatus('idle', 'Idle');
+    return null;
+  }
+}
+
+function setBadge(id, type, html) {
+  const el = document.getElementById(id);
+  el.className = 'badge badge-' + type;
+  el.innerHTML = html;
+}
+
+function setStatus(type, text) {
+  const el = document.getElementById('topbarStatus');
+  el.className = 'badge badge-' + type;
+  el.textContent = text;
+}
+
+// ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
+function buildSystem() {
+  return `You are a research assistant helping build an acquisition target list for a search fund investor.
+Industry: ${state.industry}
+Geography: ${state.geography}
+Your job is to help at each step of the 6-step process: briefing, geography, license list parsing, web scrape gap-filling, TRUE/FALSE filtering, and contact finding.
+Be concise, structured, and accurate. When outputting lists, use clean CSV format when asked.`;
+}
+
+// ─── STEP 1 ───────────────────────────────────────────────────────────────────
+async function runStep1() {
+  state.industry = document.getElementById('industryName').value.trim();
+  state.industryNotes = document.getElementById('industryNotes').value.trim();
+  if (!state.industry) { alert('Please enter an industry name.'); return; }
+
+  // Reset conversation for fresh search
+  state.conversationHistory = [];
+
+  const prompt = `I am building an acquisition target list for a search fund.
+Industry: ${state.industry}
+
+Here is my research on this industry:
+${state.industryNotes || '(No additional notes provided — proceed with general knowledge of this industry.)'}
+
+Please read this carefully and confirm you understand:
+- What this industry does and how it is regulated
+- What sub-categories exist within it
+- What recurring revenue looks like vs one-time work
+- What license types companies in this space typically hold
+- Any other context I have provided
+
+Do not start searching yet. Just confirm what you have learned and note anything I should clarify.`;
+
+  const result = await callClaude(prompt, buildSystem(), 'badge0', 'respBody0', 'resp0');
+  if (result) { markDone(0); setTimeout(() => goToStep(1), 600); }
+}
+
+// ─── STEP 2 ───────────────────────────────────────────────────────────────────
+async function runStep2() {
+  state.geography = document.getElementById('geography').value.trim();
+  const geoNotes = document.getElementById('geoNotes').value.trim();
+  if (!state.geography) { alert('Please enter a geography.'); return; }
+
+  const prompt = `The geography for this search is: ${state.geography}
+${geoNotes ? '\nAdditional notes: ' + geoNotes : ''}
+
+Please apply this as a hard filter to everything we build going forward. Any company not headquartered in this geography should be marked FALSE regardless of other criteria.
+
+Confirm you understand the geographic scope and ask if I need to clarify any boundaries.`;
+
+  const result = await callClaude(prompt, buildSystem(), 'badge1', 'respBody1', 'resp1');
+  if (result) { markDone(1); setTimeout(() => goToStep(2), 600); }
+}
+
+// ─── STEP 3a: Find License DB ─────────────────────────────────────────────────
+async function findLicenseDB() {
+  const geo = state.geography || document.getElementById('geography').value.trim() || '[geography not set — please complete Step 2]';
+  const prompt = `Does ${geo} have a public license database for ${state.industry || '[industry]'}?
+If yes:
+- What is the exact URL or agency name?
+- Can I download a CSV or PDF directly, or does it require a request?
+- What fields does it typically include?
+
+If it requires a login or phone request:
+- Who do I call or contact?
+- What exact language do I use to request the data?
+- What law (e.g. FOIA, state public records act) covers this?
+
+If no official list exists:
+- Tell me clearly and we will move to web scraping.`;
+
+  await callClaudeFresh(prompt, buildSystem(), 'badge2a', 'respBody2a', 'resp2a');
+}
+
+// ─── STEP 3: Parse License File ───────────────────────────────────────────────
+async function runStep3() {
+  if (!state.licenseCSV) { alert('Please upload a license file first.'); return; }
+
+  const preview = state.licenseCSV.split('\n').slice(0, 80).join('\n');
+  const prompt = `I am uploading the official ${state.geography} ${state.industry} license list.
+
+Here is the CSV data (first 80 rows shown for token efficiency):
+\`\`\`
+${preview}
+\`\`\`
+
+Please:
+1. Parse every company in this file
+2. Extract: Company Name, City, License Number, License Type, and any employee or tech count data
+3. Identify and note any obvious nationals or PE-backed rollups you recognize
+4. Give me a summary: total companies found, how many appear to be local independents vs nationals
+
+Return a structured summary, then a CSV table of the parsed companies with headers:
+Company_Name,City,License_Number,License_Type,Employee_Signals,Notes`;
+
+  const result = await callClaude(prompt, buildSystem(), 'badge2', 'respBody2', 'resp2');
+  if (result) { markDone(2); setTimeout(() => goToStep(3), 800); }
+}
+
+// ─── STEP 4a: Generate Search Instructions ────────────────────────────────────
+async function runStep4a() {
+  const cities = document.getElementById('cities').value.trim();
+  const platforms = [];
+  if (document.getElementById('ckGmaps').checked) platforms.push('Google Maps');
+  if (document.getElementById('ckYelp').checked) platforms.push('Yelp');
+  if (document.getElementById('ckBBB').checked) platforms.push('BBB');
+  if (document.getElementById('ckLinkedIn').checked) platforms.push('LinkedIn');
+
+  if (!cities) { alert('Please enter the cities to search.'); return; }
+
+  const prompt = `Now help me supplement the license list with web research.
+Geography: ${state.geography}
+Cities to search: ${cities}
+Platforms: ${platforms.join(', ')}
+Industry: ${state.industry}
+
+Generate exact search queries for each city + platform combination that I can copy and paste.
+Format them clearly so I know exactly what to type into each platform.
+Also tell me what signals to look for (employee count, ownership clues, etc.) when reviewing results.
+I will collect the results and paste them back for you to process.`;
+
+  await callClaude(prompt, buildSystem(), 'badge3a', 'respBody3a', 'resp3a');
+}
+
+// ─── STEP 4b: Process Scrape Results ─────────────────────────────────────────
+async function runStep4b() {
+  const scrapeData = document.getElementById('scrapeResults').value.trim();
+  if (!scrapeData) { alert('Please paste your web scrape results.'); return; }
+
+  const prompt = `Here are the web scrape results I collected:
+\`\`\`
+${scrapeData}
+\`\`\`
+
+For each company NOT already in our license list:
+1. Add it to the master list
+2. Mark Source as "Web scrape"
+3. Apply the TRUE/FALSE filter (bootstrapped + 20-200 employees + in geography)
+4. Note any ownership or employee signals in Notes
+
+Return as CSV with headers:
+Company_Name,City,Source,Employee_Signals,Ownership_Signal,Prelim_TRUE_FALSE,Notes`;
+
+  const result = await callClaude(prompt, buildSystem(), 'badge3', 'respBody3', 'resp3');
+  if (result) { markDone(3); setTimeout(() => goToStep(4), 800); }
+}
+
+// ─── STEP 5: Apply Filter ─────────────────────────────────────────────────────
+async function runStep5() {
+  const filterNotes = document.getElementById('filterNotes').value.trim();
+
+  const prompt = `Apply the ironclad filter to every company on our master list.
+
+TRUE = ALL three pass:
+1. Confirmed bootstrapped / independently owned
+2. Employee range overlaps 20–200
+3. Headquartered in ${state.geography}
+
+FALSE = any one fails. Add a reason in Notes.
+Do NOT delete FALSE companies — I need to see the PE landscape.
+
+Color coding for Ownership (note in the Ownership column):
+BOOTSTRAPPED, PE-BACKED, NATIONAL, or FRANCHISE
+
+${filterNotes ? 'Additional filter rules: ' + filterNotes : ''}
+
+Return a complete CSV with ALL companies (TRUE and FALSE) with headers:
+Company_Name,City,Source,Employee_Range,Ownership_Type,TRUE_or_FALSE,Filter_Reason,Notes`;
+
+  const result = await callClaude(prompt, buildSystem(), 'badge4', 'respBody4', 'resp4');
+  if (result) {
+    markDone(4);
+    parseFilterResult(result);
+    // Pre-populate Step 6 textarea with TRUE companies
+    const lines = result.split('\n');
+    const trueLines = lines.filter(l => l.includes(',TRUE,') || l.includes(',TRUE'));
+    document.getElementById('trueCompanies').value = trueLines.slice(0,30).join('\n');
+  }
+}
+
+function parseFilterResult(csvText) {
+  const lines = csvText.split('\n').filter(l => l.trim() && l.includes(','));
+  if (lines.length < 2) return;
+
+  let trueCount = 0, falseCount = 0;
+  const headers = lines[0].split(',');
+  const rows = lines.slice(1).map(l => l.split(','));
+
+  let thead = '<tr>' + headers.map(h => `<th>${h.trim()}</th>`).join('') + '</tr>';
+  let tbody = rows.map(row => {
+    const isTrue = row.some(c => c.trim() === 'TRUE');
+    const isFalse = row.some(c => c.trim() === 'FALSE');
+    if (isTrue) trueCount++;
+    if (isFalse) falseCount++;
+    return '<tr>' + row.map((c, i) => {
+      let cls = '';
+      const v = c.trim();
+      if (v === 'TRUE') cls = 'tag-true';
+      if (v === 'FALSE') cls = 'tag-false';
+      if (v === 'BOOTSTRAPPED') cls = 'tag-bootstrap';
+      if (v === 'PE-BACKED') cls = 'tag-pe';
+      if (v === 'NATIONAL') cls = 'tag-national';
+      if (v === 'FRANCHISE') cls = 'tag-franchise';
+      return `<td class="${cls}">${v}</td>`;
+    }).join('') + '</tr>';
+  }).join('');
+
+  document.getElementById('filterTable').querySelector('thead').innerHTML = thead;
+  document.getElementById('filterTable').querySelector('tbody').innerHTML = tbody;
+  document.getElementById('trueCount').textContent = trueCount + ' TRUE';
+  document.getElementById('falseCount').textContent = falseCount + ' FALSE';
+  document.getElementById('filterTableWrap').style.display = 'block';
+  state.companyList = rows.map(r => Object.fromEntries(headers.map((h,i) => [h.trim(), (r[i]||'').trim()])));
+}
+
+// ─── STEP 6: Pass 1 ───────────────────────────────────────────────────────────
+async function runPass1() {
+  const companies = document.getElementById('trueCompanies').value.trim();
+  if (!companies) { alert('Please paste your TRUE company list.'); return; }
+
+  // Fresh conversation for Step 6
+  state.conversationHistory = [];
+
+  const prompt = `Here are TRUE acquisition targets for the ${state.industry} industry in ${state.geography}.
+
+For each company, check these sources IN ORDER and STOP as soon as you find a name + one contact method:
+1. Company website (About / Team / Leadership / Contact page)
+2. LinkedIn company page (look for Founder / Owner / CEO)
+3. One Google search: "[Company Name]" CEO OR owner linkedin.com
+
+If you find a name and contact in any source, record it and move on.
+Do NOT keep searching once you have a result.
+If none of the three sources return a result, leave CEO fields blank and write ESCALATE in Commentary.
+
+Return a CSV table with EXACTLY these headers (no extra text before or after):
+TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary
+
+Blank = not found. Do not guess. Do not infer email patterns.
+
+Companies:
+${companies}`;
+
+  const result = await callClaude(prompt, buildSystem(), 'badge5a', 'respBody5a', 'resp5a');
+  if (result) {
+    // Parse escalations
+    const lines = result.split('\n').filter(l => l.toLowerCase().includes('escalate'));
+    if (lines.length > 0) {
+      document.getElementById('escalatedCompanies').value = lines.join('\n');
+    }
+    state.contactResults = result;
+    markDone(5);
+  }
+}
+
+// ─── STEP 6: Pass 2 ───────────────────────────────────────────────────────────
+async function runPass2() {
+  const escalated = document.getElementById('escalatedCompanies').value.trim();
+  if (!escalated) { alert('Please paste the escalated companies from Pass 1.'); return; }
+
+  const prompt = `The following companies came back empty in Pass 1. Try harder on these only.
+Check up to 5 sources per company:
+1. State Secretary of State registry (search by company name)
+2. BBB business profile
+3. Local Chamber of Commerce directory
+4. Local news or trade press mentioning the company
+5. Google: "[Company Name]" owner OR founder OR president
+
+If you find a name, update CEO_First_Name and CEO_Last_Name.
+If you find a contact method, update the relevant field.
+Update Commentary to note where the info was found.
+If still blank after all five sources, leave fields empty.
+Do NOT guess. Do NOT infer email patterns.
+
+Return CSV with the same headers:
+TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary
+
+Companies to escalate:
+${escalated}`;
+
+  await callClaude(prompt, buildSystem(), 'badge5b', 'respBody5b', 'resp5b');
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function csvToArray(csvText) {
+  const lines = csvText.split('\n').filter(l => l.trim() && l.includes(','));
+  if (!lines.length) return [];
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(l => {
+    const vals = l.split(',');
+    return Object.fromEntries(headers.map((h,i) => [h, (vals[i]||'').trim()]));
+  });
+}
+
+function exportToExcel() {
+  const csvText = document.getElementById('respBody4').textContent;
+  if (!csvText) { alert('Run Step 5 first.'); return; }
+  const rows = csvToArray(csvText);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Target List');
+  XLSX.writeFile(wb, `acquisition_targets_${state.industry.replace(/\s+/g,'_')}_${state.geography.split(',')[0].replace(/\s+/g,'_')}.xlsx`);
+}
+
+function exportContacts() {
+  const pass1 = document.getElementById('respBody5a').textContent;
+  const pass2 = document.getElementById('respBody5b').textContent;
+  const combined = pass1 + '\n' + (pass2 || '');
+  if (!pass1) { alert('Run Pass 1 first.'); return; }
+  const rows = csvToArray(combined);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Decision Makers');
+  XLSX.writeFile(wb, `decision_makers_${state.industry.replace(/\s+/g,'_')}.xlsx`);
+}
+
+// ─── DRAG DROP ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.file-drop').forEach(drop => {
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('drag-over');
+    const input = drop.querySelector('input[type="file"]');
+    if (input && e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      input.dispatchEvent(new Event('change'));
+    }
+  });
+});
+</script>
+</body>
+</html>
