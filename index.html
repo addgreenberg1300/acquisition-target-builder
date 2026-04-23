@@ -1356,44 +1356,112 @@ Company_Name,City,Source,Employee_Signals,Ownership_Signal,Prelim_TRUE_FALSE,Not
   }
 }
 
-// ─── STEP 5: Apply Filter ─────────────────────────────────────────────────────
+// ─── STEP 5: Apply Filter (batched) ──────────────────────────────────────────
 async function runStep5() {
   const filterNotes = document.getElementById('filterNotes').value.trim();
-  const licenseSection = state.licenseResults ? `LICENSE LIST DATA:\n${state.licenseResults}\n\n` : '';
-  const scrapeSection = state.scrapeResults ? `WEB SCRAPE DATA:\n${state.scrapeResults}\n\n` : '';
 
-  if (!licenseSection && !scrapeSection) {
+  // Combine license and scrape data into one list
+  const allLines = [];
+  if (state.licenseResults) {
+    const lines = state.licenseResults.split('\n').filter(l => l.trim() && l.includes(','));
+    allLines.push(...lines);
+  }
+  if (state.scrapeResults) {
+    const lines = state.scrapeResults.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('company_name'));
+    allLines.push(...lines);
+  }
+
+  if (allLines.length === 0) {
     alert('No company data found. Please complete Step 3 (license list) or Step 4 (web scrape) first.');
     return;
   }
 
-  const prompt = `Apply the ironclad filter to every company in the data below.
+  // Show the filter panel and response box
+  document.getElementById('resp4').style.display = 'block';
+  setBadge('badge4', 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
+  setStatus('loading', 'Filtering…');
+  document.getElementById('respBody4').textContent = 'Starting batch filter…';
 
-${licenseSection}${scrapeSection}
+  const BATCH_SIZE = 20;
+  const batches = [];
+  for (let i = 0; i < allLines.length; i += BATCH_SIZE) {
+    batches.push(allLines.slice(i, i + BATCH_SIZE));
+  }
+
+  let allResults = 'Company_Name,City,Source,Employee_Range,Ownership_Type,TRUE_or_FALSE,Filter_Reason,Notes\n';
+
+  for (let b = 0; b < batches.length; b++) {
+    document.getElementById('respBody4').textContent = `Filtering batch ${b + 1} of ${batches.length}…`;
+
+    const batchText = batches[b].join('\n');
+    const prompt = `Apply the ironclad filter to these companies.
+
+${batchText}
+
+Geography: ${state.geography}
 
 TRUE = ALL three pass:
 1. Confirmed bootstrapped / independently owned
 2. Employee range overlaps 20–200
 3. Headquartered in ${state.geography}
 
-FALSE = any one fails. Add a reason in Notes.
-Do NOT delete FALSE companies — I need to see the PE landscape.
+FALSE = any one fails.
+Ownership: BOOTSTRAPPED, PE-BACKED, NATIONAL, or FRANCHISE
+${filterNotes ? 'Extra rules: ' + filterNotes : ''}
 
-Ownership column values: BOOTSTRAPPED, PE-BACKED, NATIONAL, or FRANCHISE
-
-${filterNotes ? 'Additional filter rules: ' + filterNotes : ''}
-
-Return a complete CSV with ALL companies (TRUE and FALSE) with headers:
+Return CSV only, no extra text:
 Company_Name,City,Source,Employee_Range,Ownership_Type,TRUE_or_FALSE,Filter_Reason,Notes`;
 
-  const result = await callClaude(prompt, buildSystem(), 'badge4', 'respBody4', 'resp4');
-  if (result) {
-    markDone(4);
-    parseFilterResult(result);
-    const lines = result.split('\n');
-    const trueLines = lines.filter(l => l.includes(',TRUE,') || l.includes(',TRUE'));
-    document.getElementById('trueCompanies').value = trueLines.slice(0,30).join('\n');
+    const body = {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      system: buildSystem(),
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    try {
+      const resp = await fetch('https://acquisition-target-builder.vercel.app/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      const result = data.content.map(x => x.text || '').join('');
+
+      // Strip header from batch results and append
+      const lines = result.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('company_name'));
+      allResults += lines.join('\n') + '\n';
+
+      document.getElementById('respBody4').textContent = `Batch ${b + 1} of ${batches.length} done. ${b + 1 < batches.length ? 'Waiting 90 seconds before next batch…' : 'All done!'}`;
+
+    } catch (err) {
+      if (err.message.includes('rate limit')) {
+        document.getElementById('respBody4').textContent = `Batch ${b + 1} — rate limit hit. Waiting 90 seconds…`;
+        await new Promise(r => setTimeout(r, 90000));
+        b--; // retry this batch
+        continue;
+      } else {
+        document.getElementById('respBody4').textContent = `Error on batch ${b + 1}: ${err.message}`;
+        break;
+      }
+    }
+
+    // Wait 90 seconds between batches
+    if (b + 1 < batches.length) {
+      await new Promise(r => setTimeout(r, 90000));
+    }
   }
+
+  // Done — parse and display results
+  document.getElementById('respBody4').textContent = allResults;
+  setBadge('badge4', 'done', '✓ Done');
+  setStatus('done', 'Complete');
+  markDone(4);
+  parseFilterResult(allResults);
+  const lines = allResults.split('\n');
+  const trueLines = lines.filter(l => l.includes(',TRUE,') || l.includes(',TRUE'));
+  document.getElementById('trueCompanies').value = trueLines.slice(0, 30).join('\n');
 }
 
 function parseFilterResult(csvText) {
