@@ -1053,7 +1053,7 @@ async function callClaude(userMessage, systemPrompt, badgeId, bodyId, respBoxId)
   };
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://acquisition-target-builder.vercel.app/api/proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -1090,7 +1090,7 @@ async function callClaudeFresh(userMessage, systemPrompt, badgeId, bodyId, respB
   };
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://acquisition-target-builder.vercel.app/api/proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
