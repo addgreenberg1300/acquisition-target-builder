@@ -747,29 +747,24 @@
           </label>
         </div>
 
-        <div class="tip">💡 Claude cannot actually browse the web for you — instead it generates the exact search queries and instructions you need so you can quickly gather the data, then return and paste it below.</div>
+        <div class="tip">💡 Claude will search the web for companies in your geography automatically. This may take 30–60 seconds.</div>
 
         <div class="btn-row" style="margin-bottom:0;">
           <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
-          <button class="btn btn-primary" onclick="runStep4a()">Generate Search Instructions →</button>
+          <button class="btn btn-primary" onclick="runStep4a()">Search for Companies →</button>
           <button class="btn btn-ghost" onclick="skipStep(3, 4)">Skip this step →</button>
         </div>
 
         <div id="resp3a" class="response-box" style="display:none; margin-top:16px;">
           <div class="response-header">
-            <span class="response-label">Search Instructions</span>
+            <span class="response-label">Companies Found</span>
             <span class="badge badge-idle" id="badge3a">Waiting</span>
           </div>
           <div class="response-body" id="respBody3a"></div>
         </div>
 
-        <div class="divider"></div>
-
-        <div class="section-title">Done searching? Go to Step 5</div>
-        <p style="color:var(--text2);font-size:13px;">Once you've collected company names from those searches, head to Step 5 and paste them there. The filter will handle everything.</p>
-
-        <div class="btn-row">
-          <button class="btn btn-ghost" onclick="skipStep(3, 4)">Go to Filter →</button>
+        <div id="scrapeNextBtn" style="display:none; margin-top:16px;">
+          <button class="btn btn-primary" onclick="goToStep(4)">Go to Filter → </button>
         </div>
 
         <div id="resp3" class="response-box" style="display:none">
@@ -813,9 +808,6 @@
 
         <label style="margin-top:20px;">Additional Filter Notes (optional)</label>
         <textarea id="filterNotes" rows="3" placeholder="Any custom rules — e.g. also exclude companies under 5 years old, or flag franchise sub-brands…"></textarea>
-
-        <label style="margin-top:20px;">Paste Web Scrape Results Here (optional)</label>
-        <textarea id="scrapeResults" rows="6" placeholder="Paste any companies you found from Google Maps, Yelp, BBB, LinkedIn — even messy copy-paste is fine."></textarea>
 
         <div class="btn-row">
           <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
@@ -1048,6 +1040,7 @@ async function callClaude(userMessage, systemPrompt, badgeId, bodyId, respBoxId)
   const body = {
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4000,
+    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
     system: systemPrompt,
     messages: state.conversationHistory,
   };
@@ -1076,7 +1069,6 @@ async function callClaude(userMessage, systemPrompt, badgeId, bodyId, respBoxId)
 
 // Fresh call — does NOT add to conversation history (for isolated queries)
 async function callClaudeFresh(userMessage, systemPrompt, badgeId, bodyId, respBoxId) {
-  if (!state.apiKey) { alert('Please enter your Anthropic API key at the top of the page.'); return null; }
   document.getElementById(respBoxId).style.display = 'block';
   setBadge(badgeId, 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
   setStatus('loading', 'Running…');
@@ -1085,6 +1077,7 @@ async function callClaudeFresh(userMessage, systemPrompt, badgeId, bodyId, respB
   const body = {
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4000,
+    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
   };
@@ -1221,7 +1214,7 @@ Company_Name,City,License_Number,License_Type,Employee_Signals,Notes`;
   if (result) { state.licenseResults = result; markDone(2); setTimeout(() => goToStep(3), 800); }
 }
 
-// ─── STEP 4a: Generate Search Instructions ────────────────────────────────────
+// ─── STEP 4a: Web Scrape ─────────────────────────────────────────────────────
 async function runStep4a() {
   const platforms = [];
   if (document.getElementById('ckGmaps').checked) platforms.push('Google Maps');
@@ -1229,17 +1222,28 @@ async function runStep4a() {
   if (document.getElementById('ckBBB').checked) platforms.push('BBB');
   if (document.getElementById('ckLinkedIn').checked) platforms.push('LinkedIn');
 
-  const prompt = `Now help me supplement the license list with web research.
-Geography: ${state.geography}
-Platforms: ${platforms.join(', ')}
-Industry: ${state.industry}
+  const prompt = `Search the web right now for ${state.industry} companies in ${state.geography}.
 
-Generate exact search queries for this geography across each platform that I can copy and paste.
-Format them clearly so I know exactly what to type into each platform.
-Also tell me what signals to look for (employee count, ownership clues, etc.) when reviewing results.
-I will collect the results and paste them back for you to process.`;
+Search across these platforms: ${platforms.join(', ')}
 
-  await callClaude(prompt, buildSystem(), 'badge3a', 'respBody3a', 'resp3a');
+For each company you find:
+- Company name
+- City
+- Website if available
+- Estimated employee count if available
+- Any ownership signals (independent, franchise, PE-backed)
+
+Search thoroughly and return ALL companies you find as a CSV with headers:
+Company_Name,City,Website,Employee_Signals,Ownership_Signal,Source,Notes
+
+Do not generate instructions — actually search and return real companies now.`;
+
+  const result = await callClaude(prompt, buildSystem(), 'badge3a', 'respBody3a', 'resp3a');
+  if (result) {
+    state.scrapeResults = result;
+    markDone(3);
+    document.getElementById('scrapeNextBtn').style.display = 'block';
+  }
 }
 
 // ─── STEP 4b: Process Scrape Results ─────────────────────────────────────────
@@ -1265,20 +1269,18 @@ Company_Name,City,Source,Employee_Signals,Ownership_Signal,Prelim_TRUE_FALSE,Not
   if (result) {
     state.scrapeResults = result;
     markDone(3);
-    setTimeout(() => goToStep(4), 800);
+    setTimeout(() => goToStep(4), 800); // goes to Step 5 (panel4)
   }
 }
 
 // ─── STEP 5: Apply Filter ─────────────────────────────────────────────────────
 async function runStep5() {
   const filterNotes = document.getElementById('filterNotes').value.trim();
-  // Use processed results if available, otherwise grab raw textarea directly
   const licenseSection = state.licenseResults ? `LICENSE LIST DATA:\n${state.licenseResults}\n\n` : '';
-  const rawScrape = document.getElementById('scrapeResults') ? document.getElementById('scrapeResults').value.trim() : '';
-  const scrapeSection = (state.scrapeResults || rawScrape) ? `WEB SCRAPE DATA:\n${state.scrapeResults || rawScrape}\n\n` : '';
+  const scrapeSection = state.scrapeResults ? `WEB SCRAPE DATA:\n${state.scrapeResults}\n\n` : '';
 
   if (!licenseSection && !scrapeSection) {
-    alert('No company data found. Please complete Step 3 (license list) or paste your web scrape results in Step 4 first.');
+    alert('No company data found. Please complete Step 3 (license list) or Step 4 (web scrape) first.');
     return;
   }
 
