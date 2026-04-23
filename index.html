@@ -765,13 +765,11 @@
 
         <div class="divider"></div>
 
-        <div class="section-title">Paste Web Scrape Results</div>
-        <p style="color:var(--text2);font-size:13px;">Paste any raw data you collected from those searches here, then let Claude process it.</p>
-        <textarea id="scrapeResults" rows="8" placeholder="Company Name, City, Website, Phone, Employee guess…&#10;Paste whatever you found — even messy copy-paste is fine."></textarea>
+        <div class="section-title">Done searching? Go to Step 5</div>
+        <p style="color:var(--text2);font-size:13px;">Once you've collected company names from those searches, head to Step 5 and paste them there. The filter will handle everything.</p>
 
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="runStep4b()">Process & Add to List →</button>
-          <button class="btn btn-ghost" onclick="skipStep(3, 4)">Skip & go to Filter →</button>
+          <button class="btn btn-ghost" onclick="skipStep(3, 4)">Go to Filter →</button>
         </div>
 
         <div id="resp3" class="response-box" style="display:none">
@@ -815,6 +813,9 @@
 
         <label style="margin-top:20px;">Additional Filter Notes (optional)</label>
         <textarea id="filterNotes" rows="3" placeholder="Any custom rules — e.g. also exclude companies under 5 years old, or flag franchise sub-brands…"></textarea>
+
+        <label style="margin-top:20px;">Paste Web Scrape Results Here (optional)</label>
+        <textarea id="scrapeResults" rows="6" placeholder="Paste any companies you found from Google Maps, Yelp, BBB, LinkedIn — even messy copy-paste is fine."></textarea>
 
         <div class="btn-row">
           <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
@@ -1271,11 +1272,13 @@ Company_Name,City,Source,Employee_Signals,Ownership_Signal,Prelim_TRUE_FALSE,Not
 // ─── STEP 5: Apply Filter ─────────────────────────────────────────────────────
 async function runStep5() {
   const filterNotes = document.getElementById('filterNotes').value.trim();
+  // Use processed results if available, otherwise grab raw textarea directly
   const licenseSection = state.licenseResults ? `LICENSE LIST DATA:\n${state.licenseResults}\n\n` : '';
-  const scrapeSection = state.scrapeResults ? `WEB SCRAPE DATA:\n${state.scrapeResults}\n\n` : '';
+  const rawScrape = document.getElementById('scrapeResults') ? document.getElementById('scrapeResults').value.trim() : '';
+  const scrapeSection = (state.scrapeResults || rawScrape) ? `WEB SCRAPE DATA:\n${state.scrapeResults || rawScrape}\n\n` : '';
 
   if (!licenseSection && !scrapeSection) {
-    alert('No company data found. Please complete Step 3 (license list) or Step 4 (web scrape) first, or paste companies manually.');
+    alert('No company data found. Please complete Step 3 (license list) or paste your web scrape results in Step 4 first.');
     return;
   }
 
