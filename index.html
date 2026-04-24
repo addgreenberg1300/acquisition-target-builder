@@ -1223,12 +1223,6 @@ Company_Name,City,License_Number,License_Type,Employee_Signals,Notes`;
 
 // ─── STEP 4a: Web Scrape (auto-loop) ─────────────────────────────────────────
 async function runStep4a() {
-  const platforms = [];
-  if (document.getElementById('ckGmaps').checked) platforms.push('Google Maps');
-  if (document.getElementById('ckYelp').checked) platforms.push('Yelp');
-  if (document.getElementById('ckBBB').checked) platforms.push('BBB');
-  if (document.getElementById('ckLinkedIn').checked) platforms.push('LinkedIn');
-
   state.scrapeResults = '';
   document.getElementById('scrapeNextBtn').style.display = 'block';
   document.getElementById('scrapeCount').textContent = '0';
@@ -1237,27 +1231,23 @@ async function runStep4a() {
   let round = 0;
   let consecutiveEmpty = 0;
 
-  while (consecutiveEmpty < 2 && round < 10) {
+  while (consecutiveEmpty < 2 && round < 20) {
     round++;
 
-    // Only send last 5 found names to avoid prompt bloat
     const existingNames = state.scrapeResults
       ? state.scrapeResults.split('\n')
           .filter(l => l.trim() && !l.toLowerCase().startsWith('company_name'))
-          .slice(-5)
-          .map(l => l.split(',')[0])
+          .map(l => l.split(',')[0].trim())
           .join(', ')
       : '';
 
     const prompt = `Search the web for ${state.industry} companies in ${state.geography}. Round ${round}.
-${existingNames ? `Skip these already found: ${existingNames}` : ''}
-
-Search then extract ONLY: company name and city. Discard all other webpage content.
-Independent/bootstrapped companies only, no national chains.
-
-Return up to 30 companies as CSV, nothing else:
+${existingNames ? `Do NOT repeat these already found: ${existingNames}` : ''}
+Find independent/bootstrapped companies only, not national chains.
+Extract ONLY company name and city. Discard all other webpage content.
+Return CSV only, no extra text:
 Company_Name,City
-If none found, return only the header.`;
+If no new companies found, return only the header.`;
 
     setBadge('badge3a', 'loading', `<span class="dots"><span>.</span><span>.</span><span>.</span></span> Round ${round}`);
     document.getElementById('respBody3a').textContent = `Round ${round} — searching…`;
@@ -1285,29 +1275,33 @@ If none found, return only the header.`;
 
       if (dataLines.length === 0) {
         consecutiveEmpty++;
-        document.getElementById('respBody3a').textContent = `Round ${round} — no new companies found.`;
+        document.getElementById('respBody3a').textContent = `Round ${round} — no new companies found (${consecutiveEmpty}/2). Waiting 90 seconds…`;
       } else {
         consecutiveEmpty = 0;
-        if (state.scrapeResults) {
-          state.scrapeResults += '\n' + dataLines.join('\n');
+        if (!state.scrapeResults) {
+          state.scrapeResults = 'Company_Name,City\n' + dataLines.join('\n');
         } else {
-          const header = 'Company_Name,City,Website,Employee_Signals,Ownership_Signal,Source';
-          state.scrapeResults = header + '\n' + dataLines.join('\n');
+          state.scrapeResults += '\n' + dataLines.join('\n');
         }
         const count = state.scrapeResults.split('\n').filter(l => l.trim() && !l.toLowerCase().startsWith('company_name')).length;
         document.getElementById('scrapeCount').textContent = count;
-        document.getElementById('respBody3a').textContent = `Round ${round} complete — ${count} companies collected. Waiting 90 seconds before next search…`;
+        document.getElementById('respBody3a').textContent = `Round ${round} complete — ${count} companies collected. Waiting 90 seconds…`;
       }
 
-      // Wait 90 seconds between rounds to stay under 30k token/min limit
-      if (consecutiveEmpty < 2 && round < 10) {
+      if (consecutiveEmpty < 2 && round < 20) {
         await new Promise(r => setTimeout(r, 90000));
       }
 
     } catch (err) {
       if (err.message.includes('rate limit')) {
-        document.getElementById('respBody3a').textContent = `Round ${round} — rate limit hit. Waiting 90 seconds…`;
+        document.getElementById('respBody3a').textContent = `Round ${round} — rate limit hit. Waiting 90 seconds then retrying…`;
         await new Promise(r => setTimeout(r, 90000));
+        round--;
+        continue;
+      } else if (err.message.includes('credit')) {
+        document.getElementById('respBody3a').textContent = `Out of credits — add credits at console.anthropic.com then try again.`;
+        setBadge('badge3a', 'error', '✗ Out of credits');
+        return;
       } else {
         document.getElementById('respBody3a').textContent = `Error: ${err.message}. Moving to filter with what we have.`;
         break;
