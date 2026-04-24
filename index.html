@@ -854,19 +854,14 @@
           <h2 class="step-title">Decision Makers</h2>
         </div>
         <div class="panel-intro">
-          <p>Finds CEO/owner contact info for TRUE companies only, in two passes. <strong>Pass 1</strong> is fast — checks website, LinkedIn, and one Google search. <strong>Pass 2</strong> digs deeper only for companies Pass 1 couldn't resolve. Only confirmed public sources are used — no guessing.</p>
+          <p>Finds CEO/owner contact info for all TRUE companies automatically. Pass 1 checks website, LinkedIn, and Google. Pass 2 runs automatically for any not found in Pass 1. Just click Run and walk away.</p>
         </div>
 
-        <label>TRUE Companies (paste names, one per line, or as CSV)</label>
-        <textarea id="trueCompanies" rows="10" placeholder="Acme Plumbing — Denver, CO&#10;Colorado HVAC Solutions — Aurora, CO&#10;Rocky Mountain Fire Protection — Lakewood, CO&#10;…"></textarea>
+        <div class="section-title" style="margin-top:4px;">Pass 1 + Pass 2 — Fully Automatic</div>
 
-        <div class="tip">💡 Batch 10–15 companies at a time for best results. Start a fresh session for this step if you've run Steps 1–5 in the same window (paste results above).</div>
-
-        <div class="section-title" style="margin-top:20px;">Pass 1 — Quick Sweep</div>
-
-        <div class="btn-row" style="margin-top:0;">
+        <div class="btn-row" style="margin-top:8px;">
           <button class="btn btn-secondary" onclick="goToStep(4)">← Back</button>
-          <button class="btn btn-primary" onclick="runPass1()">Run Pass 1 →</button>
+          <button class="btn btn-primary" onclick="runPass1()">Run Decision Maker Search →</button>
         </div>
 
         <div id="resp5a" class="response-box" style="display:none">
@@ -1498,9 +1493,8 @@ Company_Name,City,Source,Employee_Range,Ownership_Type,TRUE_or_FALSE,Filter_Reas
   setStatus('done', 'Complete');
   markDone(4);
   parseFilterResult(allResults);
-  const lines = allResults.split('\n');
-  const trueLines = lines.filter(l => l.includes(',TRUE,') || l.includes(',TRUE'));
-  document.getElementById('trueCompanies').value = trueLines.slice(0, 30).join('\n');
+  // Auto-advance to Step 6
+  setTimeout(() => goToStep(5), 1000);
 }
 
 function parseFilterResult(csvText) {
@@ -1540,14 +1534,17 @@ function parseFilterResult(csvText) {
 
 // ─── STEP 6: Pass 1 ───────────────────────────────────────────────────────────
 async function runPass1() {
-  const companies = document.getElementById('trueCompanies').value.trim();
-  if (!companies) { alert('Please paste your TRUE company list.'); return; }
-
-  state.conversationHistory = [];
-  document.getElementById('resp5a').style.display = 'block';
-  setBadge('badge5a', 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
-
-  const companyLines = companies.split('\n').filter(l => l.trim());
+  // Pull TRUE companies directly from state — no textarea needed
+  if (!state.companyList || state.companyList.length === 0) {
+    alert('No filtered companies found. Please complete Step 5 first.');
+    return;
+  }
+  const trueCompanies = state.companyList.filter(c => c.TRUE_or_FALSE === 'TRUE' || c.TRUE_or_FALSE === 'TRUE ');
+  if (trueCompanies.length === 0) {
+    alert('No TRUE companies found. Please complete Step 5 first.');
+    return;
+  }
+  const companyLines = trueCompanies.map(c => c.Company_Name + (c.City ? ' — ' + c.City : ''));
   let allResults = 'TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary\n';
 
   for (let i = 0; i < companyLines.length; i++) {
