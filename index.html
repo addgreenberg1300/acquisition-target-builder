@@ -1059,7 +1059,7 @@ async function callClaude(userMessage, systemPrompt, badgeId, bodyId, respBoxId)
       body: JSON.stringify(body),
     });
     const data = await resp.json();
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) { const msg = data.error.message || ""; if (msg.includes("rate limit")) throw new Error("rate limit"); if (msg.includes("credit") || msg.includes("balance")) throw new Error("credit"); throw new Error(msg); }
     const text = data.content.map(b => b.text || '').join('');
     state.conversationHistory.push({ role: 'assistant', content: text });
     document.getElementById(bodyId).textContent = text;
@@ -1096,7 +1096,7 @@ async function callClaudeFresh(userMessage, systemPrompt, badgeId, bodyId, respB
       body: JSON.stringify(body),
     });
     const data = await resp.json();
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) { const msg = data.error.message || ""; if (msg.includes("rate limit")) throw new Error("rate limit"); if (msg.includes("credit") || msg.includes("balance")) throw new Error("credit"); throw new Error(msg); }
     const text = data.content.map(b => b.text || '').join('');
     document.getElementById(bodyId).textContent = text;
     setBadge(badgeId, 'done', '✓ Done');
@@ -1267,7 +1267,7 @@ If no new companies found, return only the header.`;
         body: JSON.stringify(body),
       });
       const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) { const msg = data.error.message || ""; if (msg.includes("rate limit")) throw new Error("rate limit"); if (msg.includes("credit") || msg.includes("balance")) throw new Error("credit"); throw new Error(msg); }
       const result = data.content.map(b => b.text || '').join('');
 
       const newLines = result.split('\n').filter(l => l.trim() && l.includes(','));
@@ -1420,7 +1420,7 @@ Company_Name,City,Source,Employee_Range,Ownership_Type,TRUE_or_FALSE,Filter_Reas
         body: JSON.stringify(body),
       });
       const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) { const msg = data.error.message || ""; if (msg.includes("rate limit")) throw new Error("rate limit"); if (msg.includes("credit") || msg.includes("balance")) throw new Error("credit"); throw new Error(msg); }
       const result = data.content.map(x => x.text || '').join('');
 
       // Strip header from batch results and append
@@ -1498,66 +1498,165 @@ async function runPass1() {
   const companies = document.getElementById('trueCompanies').value.trim();
   if (!companies) { alert('Please paste your TRUE company list.'); return; }
 
-  // Fresh conversation for Step 6
   state.conversationHistory = [];
+  document.getElementById('resp5a').style.display = 'block';
+  setBadge('badge5a', 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
+  document.getElementById('respBody5a').textContent = 'Starting Pass 1…';
 
-  const prompt = `Here are TRUE acquisition targets for the ${state.industry} industry in ${state.geography}.
+  const companyLines = companies.split('\n').filter(l => l.trim());
+  const BATCH = 5;
+  let allResults = 'TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary\n';
 
-For each company, check these sources IN ORDER and STOP as soon as you find a name + one contact method:
-1. Company website (About / Team / Leadership / Contact page)
-2. LinkedIn company page (look for Founder / Owner / CEO)
-3. One Google search: "[Company Name]" CEO OR owner linkedin.com
+  for (let i = 0; i < companyLines.length; i += BATCH) {
+    const batch = companyLines.slice(i, i + BATCH).join('\n');
+    const batchNum = Math.floor(i / BATCH) + 1;
+    const totalBatches = Math.ceil(companyLines.length / BATCH);
+    document.getElementById('respBody5a').textContent = `Pass 1 — batch ${batchNum} of ${totalBatches}…`;
 
-If you find a name and contact in any source, record it and move on.
-Do NOT keep searching once you have a result.
-If none of the three sources return a result, leave CEO fields blank and write ESCALATE in Commentary.
+    const prompt = `Find CEO contact info for these companies. Check IN ORDER, stop at first hit per company:
+1. Company website (About/Team/Leadership)
+2. LinkedIn company page
+3. Google: "[Company Name]" CEO OR owner
 
-Return a CSV table with EXACTLY these headers (no extra text before or after):
+Return ONLY CSV — no commentary, no explanation, no intro text:
 TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary
 
-Blank = not found. Do not guess. Do not infer email patterns.
+Write ESCALATE in Commentary if not found after all 3 sources. Blank = not found. No guessing.
 
 Companies:
-${companies}`;
+${batch}`;
 
-  const result = await callClaude(prompt, buildSystem(), 'badge5a', 'respBody5a', 'resp5a');
-  if (result) {
-    // Parse escalations
-    const lines = result.split('\n').filter(l => l.toLowerCase().includes('escalate'));
-    if (lines.length > 0) {
-      document.getElementById('escalatedCompanies').value = lines.join('\n');
+    const body = {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      system: buildSystem(),
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    try {
+      const resp = await fetch('https://acquisition-target-builder.vercel.app/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (data.error) { const msg = data.error.message || ""; if (msg.includes("rate limit")) throw new Error("rate limit"); if (msg.includes("credit") || msg.includes("balance")) throw new Error("credit"); throw new Error(msg); }
+      const result = data.content.map(b => b.text || '').join('');
+      const dataLines = result.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('true_or_false'));
+      allResults += dataLines.join('\n') + '\n';
+      document.getElementById('respBody5a').textContent = `Batch ${batchNum} of ${totalBatches} done. ${i + BATCH < companyLines.length ? 'Waiting 90 seconds…' : 'All done!'}`;
+    } catch (err) {
+      if (err.message.includes('rate limit')) {
+        document.getElementById('respBody5a').textContent = `Rate limit — waiting 90 seconds then retrying batch ${batchNum}…`;
+        await new Promise(r => setTimeout(r, 90000));
+        i -= BATCH;
+        continue;
+      } else if (err.message.includes('credit')) {
+        document.getElementById('respBody5a').textContent = `Out of credits — add credits at console.anthropic.com.`;
+        setBadge('badge5a', 'error', '✗ Out of credits');
+        return;
+      }
     }
-    state.contactResults = result;
-    markDone(5);
+
+    if (i + BATCH < companyLines.length) {
+      await new Promise(r => setTimeout(r, 90000));
+    }
   }
+
+  // Show final CSV
+  document.getElementById('respBody5a').textContent = allResults;
+  setBadge('badge5a', 'done', '✓ Done');
+  state.contactResults = allResults;
+
+  // Auto-extract escalated companies — grab whole line if it contains ESCALATE anywhere
+  const escalatedLines = allResults.split('\n').filter(l => l.toUpperCase().includes('ESCALAT'));
+  // Extract just company names for Pass 2
+  const escalatedNames = escalatedLines.map(l => {
+    const parts = l.split(',');
+    // Company_Name is column 6 (index 5)
+    return parts[5] ? parts[5].trim() : parts[0].trim();
+  }).filter(n => n);
+  state.escalatedCompanies = escalatedNames.join('\n');
+  document.getElementById('escalatedCompanies').value = state.escalatedCompanies;
+  markDone(5);
 }
 
 // ─── STEP 6: Pass 2 ───────────────────────────────────────────────────────────
 async function runPass2() {
-  const escalated = document.getElementById('escalatedCompanies').value.trim();
-  if (!escalated) { alert('Please paste the escalated companies from Pass 1.'); return; }
+  // Auto-pull from state if textarea empty
+  const escalated = document.getElementById('escalatedCompanies').value.trim() || state.escalatedCompanies || '';
+  if (!escalated) { alert('No escalated companies found. Run Pass 1 first.'); return; }
 
-  const prompt = `The following companies came back empty in Pass 1. Try harder on these only.
-Check up to 5 sources per company:
-1. State Secretary of State registry (search by company name)
+  document.getElementById('resp5b').style.display = 'block';
+  setBadge('badge5b', 'loading', '<span class="dots"><span>.</span><span>.</span><span>.</span></span>');
+  document.getElementById('respBody5b').textContent = 'Starting Pass 2…';
+
+  const companyLines = escalated.split('\n').filter(l => l.trim());
+  const BATCH = 3;
+  let allResults = 'TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary\n';
+
+  for (let i = 0; i < companyLines.length; i += BATCH) {
+    const batch = companyLines.slice(i, i + BATCH).join('\n');
+    const batchNum = Math.floor(i / BATCH) + 1;
+    const totalBatches = Math.ceil(companyLines.length / BATCH);
+    document.getElementById('respBody5b').textContent = `Pass 2 — batch ${batchNum} of ${totalBatches}…`;
+
+    const prompt = `These companies had no result in Pass 1. Dig deeper — check up to 5 sources:
+1. State Secretary of State registry
 2. BBB business profile
 3. Local Chamber of Commerce directory
-4. Local news or trade press mentioning the company
+4. Local news or trade press
 5. Google: "[Company Name]" owner OR founder OR president
 
-If you find a name, update CEO_First_Name and CEO_Last_Name.
-If you find a contact method, update the relevant field.
-Update Commentary to note where the info was found.
-If still blank after all five sources, leave fields empty.
-Do NOT guess. Do NOT infer email patterns.
-
-Return CSV with the same headers:
+Return ONLY CSV — no commentary, no explanation:
 TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary
 
-Companies to escalate:
-${escalated}`;
+Note source in Commentary. Blank = not found. No guessing.
 
-  await callClaude(prompt, buildSystem(), 'badge5b', 'respBody5b', 'resp5b');
+Companies:
+${batch}`;
+
+    const body = {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      system: buildSystem(),
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    try {
+      const resp = await fetch('https://acquisition-target-builder.vercel.app/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (data.error) { const msg = data.error.message || ""; if (msg.includes("rate limit")) throw new Error("rate limit"); if (msg.includes("credit") || msg.includes("balance")) throw new Error("credit"); throw new Error(msg); }
+      const result = data.content.map(b => b.text || '').join('');
+      const dataLines = result.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('true_or_false'));
+      allResults += dataLines.join('\n') + '\n';
+      document.getElementById('respBody5b').textContent = `Batch ${batchNum} of ${totalBatches} done. ${i + BATCH < companyLines.length ? 'Waiting 90 seconds…' : 'All done!'}`;
+    } catch (err) {
+      if (err.message.includes('rate limit')) {
+        document.getElementById('respBody5b').textContent = `Rate limit — waiting 90 seconds then retrying batch ${batchNum}…`;
+        await new Promise(r => setTimeout(r, 90000));
+        i -= BATCH;
+        continue;
+      } else if (err.message.includes('credit')) {
+        document.getElementById('respBody5b').textContent = `Out of credits — add credits at console.anthropic.com.`;
+        setBadge('badge5b', 'error', '✗ Out of credits');
+        return;
+      }
+    }
+
+    if (i + BATCH < companyLines.length) {
+      await new Promise(r => setTimeout(r, 90000));
+    }
+  }
+
+  document.getElementById('respBody5b').textContent = allResults;
+  setBadge('badge5b', 'done', '✓ Done');
 }
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
