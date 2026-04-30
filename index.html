@@ -668,7 +668,21 @@ select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns
 
         <div class="btn-row">
           <button class="btn btn-secondary" onclick="goToStep(0)">← Back</button>
-          <button class="btn btn-primary" onclick="goToStep(2)">Continue to Upload →</button>
+          <button class="btn btn-primary" onclick="continueToUpload()">Continue to Upload →</button>
+        </div>
+
+        <!-- Cowork prompt box — shown when Cowork is selected -->
+        <div id="coworkPromptBox" style="display:none; margin-top:24px;">
+          <div class="response-box">
+            <div class="response-header">
+              <span class="response-label">Cowork Research Prompt — Copy & Paste into Cowork</span>
+              <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="copyCoworkPrompt()">Copy</button>
+            </div>
+            <div class="response-body" id="coworkPromptText"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="goToStep(2)">I've done the research → Go to Upload →</button>
+          </div>
         </div>
       </div>
 
@@ -805,7 +819,7 @@ select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns
           <h2 class="step-title">Decision Makers</h2>
         </div>
         <div class="panel-intro">
-          <p>Finds CEO/owner contact info for all TRUE companies automatically — one at a time, saving after every company. Pass 1 checks website, LinkedIn, and Google. Pass 2 runs automatically for any not found. Just click and walk away.</p>
+          <p>Finds CEO/owner contact info for all TRUE companies. Grata contacts are pulled instantly at no cost. For any missing, one quick web search is run. Just click and walk away.</p>
         </div>
 
         <div class="btn-row" style="margin-top:4px;">
@@ -815,28 +829,49 @@ select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns
 
         <div id="resp4a" class="response-box" style="display:none">
           <div class="response-header">
-            <span class="response-label">Pass 1 — Quick Sweep</span>
+            <span class="response-label">Decision Maker Results</span>
             <span class="badge badge-idle" id="badge4a">Waiting</span>
           </div>
           <div class="response-body" id="respBody4a"></div>
-        </div>
-
-        <div class="gold-rule"></div>
-
-        <div class="section-title" style="color:var(--white2);font-size:16px;">Pass 2 — Escalation <span style="color:var(--white4);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:300;margin-left:6px;">runs automatically after Pass 1</span></div>
-
-        <div id="resp4b" class="response-box" style="display:none">
-          <div class="response-header">
-            <span class="response-label">Pass 2 — Deep Search</span>
-            <span class="badge badge-idle" id="badge4b">Waiting</span>
-          </div>
-          <div class="response-body" id="respBody4b"></div>
         </div>
 
         <div class="export-bar" style="margin-top:22px;">
           <div class="export-bar-label">Export Decision Maker Contacts to Excel</div>
           <button class="btn btn-primary" onclick="exportContacts()">⬇ Export Contacts</button>
         </div>
+
+        <div class="gold-rule"></div>
+
+        <div class="section-title" style="font-size:16px;">Still have blanks? Use Cowork to fill them in.</div>
+        <p style="color:var(--white3);font-size:13px;line-height:1.7;margin-bottom:14px;">After exporting, filter your Excel to rows with no CEO name. For the companies that matter most, paste them into Cowork with this prompt to find their owner info manually:</p>
+
+        <div class="response-box">
+          <div class="response-header">
+            <span class="response-label">Cowork Follow-Up Prompt</span>
+            <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="copyFollowUpPrompt()">Copy</button>
+          </div>
+          <div class="response-body" id="coworkFollowUpText">I exported a list of acquisition targets in the [Industry] space in [Geography]. The following companies came back with no owner or CEO contact info. Please search for the owner or decision maker at each one.
+
+For each company, check in this order:
+1. Their company website (About / Team / Leadership page)
+2. LinkedIn company page
+3. [Geography] Secretary of State business registry
+4. Google: "[Company Name]" owner OR founder OR CEO
+
+For each company return:
+- Company Name
+- Owner/CEO First Name
+- Owner/CEO Last Name
+- Email (if found publicly)
+- LinkedIn URL (if found)
+- Where you found the info
+
+If you cannot find the owner after checking all sources, write "Not found" and move on. Do not guess or infer emails.
+
+Companies to research:
+[PASTE YOUR BLANK COMPANIES HERE]</div>
+        </div>
+
       </div>
 
     </div>
@@ -897,8 +932,8 @@ function skipStep(current, next) { markDone(current); goToStep(next); }
 function saveKey() {
   state.apiKey = document.getElementById('apiKey').value.trim();
   if (state.apiKey) {
-    document.getElementById('apiKey').style.borderColor = 'var(--gold)';
-    setTimeout(() => document.getElementById('apiKey').style.borderColor = '', 1500);
+    document.getElementById('apiKey').style.borderColor = 'var(--green)';
+    document.getElementById('apiKey').style.background = 'rgba(74,158,110,0.08)';
   }
 }
 
@@ -948,6 +983,53 @@ function readCoworkFile() {
   const file = document.getElementById('coworkFile').files[0];
   if (!file) return;
   readCSVFile(file, csv => { state.coworkCSV = csv; });
+}
+
+// ─── CONTINUE TO UPLOAD ───────────────────────────────────────────────────────
+function continueToUpload() {
+  if (state.sources.cowork) {
+    // Generate and show Cowork prompt
+    const prompt = `I am building an acquisition target list for a search fund.
+
+Industry: ${state.industry || '[Industry]'}
+Geography: ${state.geography || '[Geography]'}
+
+Please search the web and find as many independently owned ${state.industry || '[Industry]'} companies in ${state.geography || '[Geography]'} as possible.
+
+For each company find:
+- Company Name
+- City
+- Website
+- Estimated employee count (if available)
+- Any ownership signals (independent, family owned, franchise, PE-backed)
+- Phone number (if available)
+
+Rules:
+- Do NOT include national chains (e.g. Johnson Controls, Tyco, SimplexGrinnell, ADT, etc.)
+- Do NOT include PE-backed rollups
+- Focus on locally owned, independent operators
+- Search Google Maps, Yelp, BBB, LinkedIn, and any state directories you can find
+
+When done, export your findings as a CSV with these exact columns:
+Company_Name,City,Website,Employee_Estimate,Ownership_Signal,Phone
+
+Save the CSV and return it to me so I can upload it.`;
+
+    document.getElementById('coworkPromptText').textContent = prompt;
+    document.getElementById('coworkPromptBox').style.display = 'block';
+    document.getElementById('coworkPromptBox').scrollIntoView({ behavior: 'smooth' });
+  } else {
+    goToStep(2);
+  }
+}
+
+function copyCoworkPrompt() {
+  const text = document.getElementById('coworkPromptText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
 }
 
 // ─── SOURCE TOGGLES ───────────────────────────────────────────────────────────
@@ -1428,97 +1510,26 @@ ONLY the CSV row.`;
 
   document.getElementById('respBody4a').textContent = allResults;
   setBadge('badge4a', 'done', '✓ Done');
+  setStatus('done', 'Complete');
   state.contactResults = allResults;
-
-  // Extract escalated
-  const escalatedLines = allResults.split('\n').filter(l => l.toUpperCase().includes('ESCALAT'));
-  const escalatedNames = escalatedLines.map(l => { const p = l.split(','); return p[5] ? p[5].trim() : p[0].trim(); }).filter(n => n);
-  state.escalatedCompanies = escalatedNames.join('\n');
   markDone(4);
 
-  if (escalatedNames.length > 0) {
-    await runPass2();
-  } else {
-    document.getElementById('resp4b').style.display = 'block';
-    document.getElementById('respBody4b').textContent = 'No escalated companies — Pass 2 not needed.';
-    setBadge('badge4b', 'done', '✓ Done');
-    setStatus('done', 'Complete');
+  // Update Cowork follow-up prompt with real industry/geography
+  const followUp = document.getElementById('coworkFollowUpText');
+  if (followUp) {
+    followUp.textContent = followUp.textContent
+      .replace(/\[Industry\]/g, state.industry || 'your industry')
+      .replace(/\[Geography\]/g, state.geography || 'your geography');
   }
 }
 
-// ─── STEP 5: Pass 2 ──────────────────────────────────────────────────────────
-async function runPass2() {
-  const escalated = state.escalatedCompanies || '';
-  if (!escalated) return;
-
-  document.getElementById('resp4b').style.display = 'block';
-  setBadge('badge4b', 'loading', loading());
-  setStatus('loading', 'Pass 2 running…');
-
-  const companyLines = escalated.split('\n').filter(l => l.trim());
-  let allResults = 'TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary\n';
-
-  for (let i = 0; i < companyLines.length; i++) {
-    const company = companyLines[i].trim();
-    document.getElementById('respBody4b').textContent = `Company ${i+1} of ${companyLines.length}: ${company}…\n\n${allResults}`;
-
-    const prompt = `OUTPUT FORMAT: One CSV row only. No prose. No explanation.
-
-Quick search for owner/CEO of: ${company} (${state.geography})
-Do max 2 searches: try Secretary of State registry first, then one Google search.
-Stop immediately after 2 searches regardless of result.
-
-Output one line:
-TRUE,[First],[Last],[Email],[LinkedIn],[${company}],[domain],[phone],[source or Not found]
-
-ONLY the CSV row.`;
-
-    const body = {
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 100,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      system: 'You are a CSV tool. Max 2 searches. Output only one CSV row, nothing else.',
-      messages: [{ role: 'user', content: prompt }],
-    };
-
-    let success = false;
-    while (!success) {
-      try {
-        const resp = await fetch(PROXY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const data = await resp.json();
-        if (data.error) { const msg = data.error.message||''; if(msg.includes('rate limit')) throw new Error('rate limit'); if(msg.includes('credit')||msg.includes('balance')) throw new Error('credit'); throw new Error(msg); }
-        const result = data.content.map(b => b.text||'').join('');
-        const lines = result.split('\n').filter(l => {
-          const t = l.trim();
-          return (t.startsWith('TRUE') || t.startsWith('FALSE')) && t.includes(',');
-        });
-        if (lines.length > 0) {
-          allResults += lines[0] + '\n';
-        } else {
-          allResults += `TRUE,,,,,${company},,,Not found\n`;
-        }
-        success = true;
-      } catch (err) {
-        if (err.message.includes('rate limit')) {
-          document.getElementById('respBody4b').textContent = `Rate limit on company ${i+1} — waiting 61s…\n\n${allResults}`;
-          await new Promise(r => setTimeout(r, 61000));
-        } else if (err.message.includes('credit')) {
-          document.getElementById('respBody4b').textContent = `Out of credits.\n\nSaved so far:\n${allResults}`;
-          setBadge('badge4b', 'error', '✗ Out of credits');
-          return;
-        } else {
-          allResults += `TRUE,,,,,${company},,,Not found\n`;
-          success = true;
-        }
-      }
-    }
-
-    if (i + 1 < companyLines.length) await new Promise(r => setTimeout(r, 3000));
-  }
-
-  document.getElementById('respBody4b').textContent = allResults;
-  setBadge('badge4b', 'done', '✓ Done');
-  setStatus('done', 'Complete');
+function copyFollowUpPrompt() {
+  const text = document.getElementById('coworkFollowUpText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
 }
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
