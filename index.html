@@ -842,34 +842,15 @@ select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns
 
         <div class="gold-rule"></div>
 
-        <div class="section-title" style="font-size:16px;">Still have blanks? Use Cowork to fill them in.</div>
-        <p style="color:var(--white3);font-size:13px;line-height:1.7;margin-bottom:14px;">After exporting, filter your Excel to rows with no CEO name. For the companies that matter most, paste them into Cowork with this prompt to find their owner info manually:</p>
+        <div class="section-title" style="font-size:16px;">Still have blanks? Use Cowork.</div>
+        <p style="color:var(--white3);font-size:13px;line-height:1.7;margin-bottom:14px;">Copy this prompt into Cowork, then drag your exported contacts file directly into Cowork. It will fill in any missing owner and CEO info and return the completed file.</p>
 
         <div class="response-box">
           <div class="response-header">
             <span class="response-label">Cowork Follow-Up Prompt</span>
             <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="copyFollowUpPrompt()">Copy</button>
           </div>
-          <div class="response-body" id="coworkFollowUpText">I exported a list of acquisition targets in the [Industry] space in [Geography]. The following companies came back with no owner or CEO contact info. Please search for the owner or decision maker at each one.
-
-For each company, check in this order:
-1. Their company website (About / Team / Leadership page)
-2. LinkedIn company page
-3. [Geography] Secretary of State business registry
-4. Google: "[Company Name]" owner OR founder OR CEO
-
-For each company return:
-- Company Name
-- Owner/CEO First Name
-- Owner/CEO Last Name
-- Email (if found publicly)
-- LinkedIn URL (if found)
-- Where you found the info
-
-If you cannot find the owner after checking all sources, write "Not found" and move on. Do not guess or infer emails.
-
-Companies to research:
-[PASTE YOUR BLANK COMPANIES HERE]</div>
+          <div class="response-body" id="coworkFollowUpText"></div>
         </div>
 
       </div>
@@ -1514,22 +1495,39 @@ ONLY the CSV row.`;
   state.contactResults = allResults;
   markDone(4);
 
-  // Update Cowork follow-up prompt with real industry/geography
-  const followUp = document.getElementById('coworkFollowUpText');
-  if (followUp) {
-    followUp.textContent = followUp.textContent
-      .replace(/\[Industry\]/g, state.industry || 'your industry')
-      .replace(/\[Geography\]/g, state.geography || 'your geography');
-  }
+  // Auto-populate Cowork prompt
+  document.getElementById('coworkFollowUpText').textContent = buildCoworkPrompt();
 }
 
 function copyFollowUpPrompt() {
   const text = document.getElementById('coworkFollowUpText').textContent;
+  if (!text) { alert('Run Decision Maker Search first.'); return; }
   navigator.clipboard.writeText(text).then(() => {
     const btn = event.target;
     btn.textContent = 'Copied!';
     setTimeout(() => btn.textContent = 'Copy', 2000);
   });
+}
+
+function buildCoworkPrompt() {
+  return `I have a list of acquisition targets in the ${state.industry || '[Industry]'} space in ${state.geography || '[Geography]'}. I'm attaching the export file — please find the owner or CEO contact info for any company that has blank CEO fields.
+
+For each blank company, check in this order:
+1. Company website (About / Team / Leadership page)
+2. LinkedIn company page
+3. ${state.geography || '[Geography]'} Secretary of State business registry
+4. Google: "[Company Name]" owner OR founder OR CEO
+
+Fill in whatever you can find:
+- CEO First Name
+- CEO Last Name
+- Email (confirmed public sources only, no guessing)
+- LinkedIn URL
+- Where you found the info (in the Commentary column)
+
+If you cannot find the owner after checking all sources, leave the fields blank and write "Not found" in Commentary.
+
+Return the completed file with the same columns as the original.`;
 }
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
@@ -1555,11 +1553,9 @@ function exportToExcel() {
 
 function exportContacts() {
   const pass1 = state.contactResults || '';
-  const pass2 = document.getElementById('respBody4b').textContent || '';
   if (!pass1) { alert('Run Decision Maker Search first.'); return; }
-  const pass2Lines = pass2.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('true_or_false'));
-  const combined = pass1.trimEnd() + (pass2Lines.length ? '\n' + pass2Lines.join('\n') : '');
-  const rows = csvToArray(combined);
+  const rows = csvToArray(pass1);
+  if (!rows.length) { alert('No contact data found. Run Decision Maker Search first.'); return; }
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Decision Makers');
