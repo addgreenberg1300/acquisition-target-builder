@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ironclad — Acquisition Target Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --navy: #0a1628;
+  --navy2: #0f2040;
+  --navy3: #162a52;
+  --navy4: #1e3464;
+  --gold: #c8a96e;
+  --gold2: #e2c98a;
+  --gold3: #f0dfa8;
+  --white: #f4f1eb;
+  --white2: #c9c4b8;
+  --white3: #7a8a9e;
+  --white4: #2e4060;
+  --border: rgba(200,169,110,0.15);
+  --border2: rgba(200,169,110,0.08);
+  --green: #4a9e6e;
+  --red: #c05555;
+  --radius: 4px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--navy);
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+  background-image: 
+    radial-gradient(ellipse at 20% 0%, rgba(200,169,110,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(200,169,110,0.03) 0%, transparent 50%);
+}
+
+.app { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--navy2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.logo {
+  padding: 32px 24px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.logo-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--gold2);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.logo-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--white3);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-top: 2px;
+}
+
+.steps-nav { padding: 20px 0; flex: 1; }
+
+.step-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+
+.step-nav-item:hover { background: rgba(200,169,110,0.04); }
+
+.step-nav-item.active {
+  background: rgba(200,169,110,0.06);
+  border-left-color: var(--gold);
+}
+
+.step-num {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--white4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--white3);
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.step-nav-item.active .step-num {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(200,169,110,0.1);
+}
+
+.step-nav-item.done .step-num {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.step-nav-label { font-size: 12px; color: var(--white2); line-height: 1.3; font-weight: 500; }
+.step-nav-item.active .step-nav-label { color: var(--white); font-weight: 600; }
+.step-nav-item.done .step-nav-label { color: var(--white2); }
+
+.sidebar-bottom {
+  padding: 20px 24px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--white4);
+  line-height: 1.6;
+}
+
+/* MAIN */
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+.topbar {
+  padding: 20px 36px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--navy2);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar-left { display: flex; flex-direction: column; gap: 3px; }
+.topbar-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+
+.topbar-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--white);
+  letter-spacing: 0.01em;
+}
+
+.content { padding: 36px; flex: 1; max-width: 860px; }
+
+/* STEP PANELS */
+.step-panel { display: none; }
+.step-panel.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.step-header { margin-bottom: 24px; }
+.step-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.step-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px;
+  font-weight: 500;
+  color: var(--white);
+  line-height: 1.1;
+}
+
+.panel-intro {
+  background: rgba(200,169,110,0.04);
+  border: 1px solid var(--border);
+  padding: 18px 22px;
+  margin-bottom: 28px;
+}
+
+.panel-intro p { color: var(--white2); line-height: 1.7; font-size: 13px; }
+.panel-intro strong { color: var(--gold2); font-weight: 500; }
+
+/* FORM */
+label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--white3);
+  margin-bottom: 6px;
+  margin-top: 22px;
+}
+
+label:first-of-type { margin-top: 0; }
+
+input[type="text"], input[type="password"], textarea, select {
+  width: 100%;
+  background: var(--navy3);
+  border: 1px solid var(--white4);
+  color: var(--white);
+  padding: 10px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  border-radius: 0;
+  appearance: none;
+}
+
+input:focus, textarea:focus, select:focus { border-color: var(--gold); }
+textarea { resize: vertical; min-height: 100px; line-height: 1.6; }
+select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7568' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+.file-drop {
+  border: 1px dashed var(--white4);
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--navy3);
+  position: relative;
+}
+
+.file-drop:hover, .file-drop.drag-over {
+  border-color: var(--gold);
+  background: rgba(200,169,110,0.04);
+}
+
+.file-drop input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.file-drop-icon { font-size: 24px; margin-bottom: 8px; }
+.file-drop-text { color: var(--white2); font-size: 13px; }
+.file-drop-hint { color: var(--white3); font-size: 11px; margin-top: 4px; font-family: 'DM Mono', monospace; }
+.file-name { color: var(--gold2); font-size: 11px; margin-top: 8px; font-family: 'DM Mono', monospace; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary { background: var(--gold); color: var(--navy); }
+.btn-primary:hover { background: var(--gold2); }
+.btn-primary:disabled { background: var(--white4); color: var(--white3); cursor: not-allowed; }
+
+.btn-secondary { background: transparent; color: var(--white2); border: 1px solid var(--white4); }
+.btn-secondary:hover { border-color: var(--white2); color: var(--white); }
+
+.btn-ghost { background: transparent; color: var(--white3); font-size: 12px; padding: 8px 14px; }
+.btn-ghost:hover { color: var(--white); }
+
+.btn-row { display: flex; gap: 12px; align-items: center; margin-top: 28px; }
+
+/* RESPONSE */
+.response-box {
+  background: var(--navy2);
+  border: 1px solid var(--border);
+  margin-top: 22px;
+}
+
+.response-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.response-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+}
+
+.response-body {
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--white2);
+  white-space: pre-wrap;
+  max-height: 460px;
+  overflow-y: auto;
+  font-family: 'DM Mono', monospace;
+}
+
+/* BADGES */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-family: 'DM Mono', monospace;
+  border: 1px solid;
+}
+
+.badge-idle { border-color: var(--white4); color: var(--white3); }
+.badge-loading { border-color: rgba(200,169,110,0.4); color: var(--gold); background: rgba(200,169,110,0.06); }
+.badge-done { border-color: rgba(74,158,110,0.4); color: var(--green); background: rgba(74,158,110,0.06); }
+.badge-error { border-color: rgba(192,85,85,0.4); color: var(--red); background: rgba(192,85,85,0.06); }
+
+@keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+.dots span { animation: blink 1.4s infinite; display: inline-block; }
+.dots span:nth-child(2) { animation-delay: 0.2s; }
+.dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* DIVIDER */
+.divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+/* SECTION TITLE */
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--white);
+  margin: 24px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* DATA SOURCE CARDS */
+.source-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+
+.source-card {
+  background: var(--navy3);
+  border: 1px solid var(--white4);
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.source-card:hover { border-color: var(--gold); background: rgba(200,169,110,0.03); }
+.source-card.selected { border-color: var(--gold); background: rgba(200,169,110,0.06); }
+
+.source-card input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+
+.source-card-content { flex: 1; }
+.source-card-title { font-size: 13px; font-weight: 500; color: var(--white); margin-bottom: 4px; }
+.source-card-desc { font-size: 12px; color: var(--white3); line-height: 1.5; }
+
+/* UPLOAD SECTIONS */
+.upload-section {
+  border: 1px solid var(--border);
+  padding: 20px;
+  margin-top: 12px;
+  background: rgba(200,169,110,0.02);
+}
+
+.upload-section-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+
+/* TABLE */
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 16px; }
+.data-table th {
+  background: var(--navy3);
+  padding: 8px 12px;
+  text-align: left;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--white3);
+  border-bottom: 1px solid var(--border);
+}
+.data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border2); color: var(--white2); vertical-align: top; }
+.data-table tr:hover td { background: rgba(255,255,255,0.01); }
+
+.tag-true { color: var(--green); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; }
+.tag-false { color: var(--red); font-family: 'DM Mono', monospace; font-size: 10px; }
+.tag-bootstrap { color: var(--green); }
+.tag-pe { color: var(--red); }
+.tag-national { color: #d4895a; }
+.tag-franchise { color: var(--gold); }
+
+/* EXPORT BAR */
+.export-bar {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 22px;
+  background: rgba(200,169,110,0.04);
+  border: 1px solid var(--border);
+  margin-top: 22px;
+}
+.export-bar-label { font-size: 13px; color: var(--white2); flex: 1; }
+
+/* COUNT */
+.count-badge {
+  display: inline-flex;
+  padding: 2px 8px;
+  background: var(--navy3);
+  border: 1px solid var(--border);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--gold2);
+  margin-left: 8px;
+}
+
+/* TIP */
+.tip {
+  display: flex;
+  gap: 10px;
+  border: 1px solid rgba(200,169,110,0.2);
+  background: rgba(200,169,110,0.04);
+  padding: 12px 16px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--gold2);
+  line-height: 1.5;
+}
+
+/* CSV PREVIEW */
+.csv-preview { overflow-x: auto; border: 1px solid var(--border); margin-top: 12px; }
+
+/* API KEY */
+.api-banner {
+  background: rgba(200,169,110,0.05);
+  border: 1px solid var(--border);
+  padding: 14px 20px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.api-banner-label { font-size: 12px; color: var(--white3); white-space: nowrap; font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+.api-banner input { flex: 1; margin: 0; font-family: 'DM Mono', monospace; font-size: 12px; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--white4); }
+
+/* GOLD RULE */
+.gold-rule { height: 1px; background: linear-gradient(90deg, var(--gold) 0%, transparent 100%); margin: 28px 0; opacity: 0.3; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">
+        <div class="logo-icon">⬡</div>
+        <div>
+          <div class="logo-name">Ironclad</div>
+        </div>
+      </div>
+      <div class="logo-sub">Acquisition Target Builder</div>
+    </div>
+
+    <nav class="steps-nav" id="stepsNav">
+      <div class="step-nav-item active" onclick="goToStep(0)" id="nav0">
+        <div class="step-num">1</div>
+        <div class="step-nav-label">Industry & Geography</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(1)" id="nav1">
+        <div class="step-num">2</div>
+        <div class="step-nav-label">Data Sources</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(2)" id="nav2">
+        <div class="step-num">3</div>
+        <div class="step-nav-label">Upload & Parse</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(3)" id="nav3">
+        <div class="step-num">4</div>
+        <div class="step-nav-label">Apply Filter</div>
+      </div>
+      <div class="step-nav-item" onclick="goToStep(4)" id="nav4">
+        <div class="step-num">5</div>
+        <div class="step-nav-label">Decision Makers</div>
+      </div>
+    </nav>
+
+    <div class="sidebar-bottom">
+      All data stays in your browser.<br>Nothing stored externally.
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-tag" id="topbarTag">Step 01 of 05</div>
+        <div class="topbar-title" id="topbarTitle">Industry & Geography</div>
+      </div>
+      <div id="topbarStatus" class="badge badge-idle">Idle</div>
+    </div>
+
+    <div class="content">
+
+      <!-- API KEY -->
+      <div class="api-banner">
+        <div class="api-banner-label">API Key</div>
+        <input type="password" id="apiKey" placeholder="sk-ant-api…" />
+        <button class="btn btn-secondary" style="padding:8px 16px;font-size:12px;" onclick="saveKey()">Save</button>
+      </div>
+
+      <!-- STEP 1: Industry & Geography -->
+      <div class="step-panel active" id="panel0">
+        <div class="step-header">
+          <span class="step-tag">Step 01</span>
+          <h2 class="step-title">Industry & Geography</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Brief Claude on the industry and lock in the geography before anything else. The more context you provide, the better every subsequent step performs. <strong>Do not skip this step.</strong></p>
+        </div>
+
+        <label>Industry</label>
+        <input type="text" id="industryName" placeholder="e.g. Fire and Life Safety, Commercial HVAC, Specialty Plumbing…" />
+
+        <label>Target Geography</label>
+        <input type="text" id="geography" placeholder="e.g. State of Utah, Greater Denver Metro, CO, Dallas County, TX…" />
+
+        <label>Research Notes <span style="color:var(--white4);font-weight:300;">(paste anything — call transcripts, articles, rough notes)</span></label>
+        <textarea id="industryNotes" rows="7" placeholder="Paste your research here. No minimum length — rough bullets are fine."></textarea>
+
+        <label>Upload Research Files <span style="color:var(--white4);font-weight:300;">(optional)</span></label>
+        <div class="file-drop" id="researchDrop">
+          <input type="file" id="researchFile" multiple accept=".pdf,.txt,.csv,.docx" onchange="handleFileSelect('researchFile','researchFileName')" />
+          <div class="file-drop-icon">📎</div>
+          <div class="file-drop-text">Drop files here or click to browse</div>
+          <div class="file-drop-hint">PDF · TXT · CSV accepted</div>
+          <div class="file-name" id="researchFileName"></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="runStep1()">Brief Claude →</button>
+        </div>
+
+        <div id="resp0" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Claude's Understanding</span>
+            <span class="badge badge-idle" id="badge0">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody0"></div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Data Sources -->
+      <div class="step-panel" id="panel1">
+        <div class="step-header">
+          <span class="step-tag">Step 02</span>
+          <h2 class="step-title">Data Sources</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Claude will check if a public license database exists for your industry and geography. Then select which data sources you have available — you can use any combination.</p>
+        </div>
+
+        <div class="btn-row" style="margin-top:0;">
+          <button class="btn btn-secondary" onclick="checkLicenseDB()">Check for Public License Database →</button>
+        </div>
+
+        <div id="resp1a" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">License Database Research</span>
+            <span class="badge badge-idle" id="badge1a">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody1a"></div>
+        </div>
+
+        <div class="gold-rule"></div>
+
+        <div class="section-title">Select your data sources</div>
+        <p style="color:var(--white3);font-size:13px;margin-bottom:4px;">Select all that apply — Claude will combine everything in Step 3.</p>
+
+        <div class="source-cards">
+          <div class="source-card" id="card-license" onclick="toggleSource('license')">
+            <input type="checkbox" id="src-license" onchange="toggleSource('license')" />
+            <div class="source-card-content">
+              <div class="source-card-title">Public License List</div>
+              <div class="source-card-desc">Official state or regulatory database. Most accurate and token-efficient. Download the CSV and upload it in Step 3.</div>
+            </div>
+          </div>
+          <div class="source-card" id="card-grata" onclick="toggleSource('grata')">
+            <input type="checkbox" id="src-grata" onchange="toggleSource('grata')" />
+            <div class="source-card-content">
+              <div class="source-card-title">Grata Export</div>
+              <div class="source-card-desc">Export your Grata search results as a CSV and upload it in Step 3. Grata data includes ownership and employee signals.</div>
+            </div>
+          </div>
+          <div class="source-card" id="card-cowork" onclick="toggleSource('cowork')">
+            <input type="checkbox" id="src-cowork" onchange="toggleSource('cowork')" />
+            <div class="source-card-content">
+              <div class="source-card-title">My Own Research (Cowork CSV)</div>
+              <div class="source-card-desc">Used Cowork or manual research to compile a list. Export as CSV with at minimum Company Name and City columns.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goToStep(0)">← Back</button>
+          <button class="btn btn-primary" onclick="continueToUpload()">Continue to Upload →</button>
+        </div>
+
+        <!-- Cowork prompt box — shown when Cowork is selected -->
+        <div id="coworkPromptBox" style="display:none; margin-top:24px;">
+          <div class="response-box">
+            <div class="response-header">
+              <span class="response-label">Cowork Research Prompt — Copy & Paste into Cowork</span>
+              <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="copyCoworkPrompt()">Copy</button>
+            </div>
+            <div class="response-body" id="coworkPromptText"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="goToStep(2)">I've done the research → Go to Upload →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Upload & Parse -->
+      <div class="step-panel" id="panel2">
+        <div class="step-header">
+          <span class="step-tag">Step 03</span>
+          <h2 class="step-title">Upload & Parse</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Upload all your data files here. Claude will parse and combine them into one master company list, flag obvious nationals or PE-backed rollups, and prepare everything for filtering.</p>
+        </div>
+
+        <!-- License Upload -->
+        <div id="upload-license" style="display:none">
+          <div class="upload-section">
+            <div class="upload-section-title">Public License List</div>
+            <div class="file-drop">
+              <input type="file" id="licenseFile" accept=".csv,.xlsx,.xls,.txt,.pdf" onchange="handleFileSelect('licenseFile','licenseFileName');readLicenseFile()" />
+              <div class="file-drop-icon">🏛</div>
+              <div class="file-drop-text">Drop the license CSV here</div>
+              <div class="file-drop-hint">CSV preferred — faster and cheaper than PDF</div>
+              <div class="file-name" id="licenseFileName"></div>
+            </div>
+            <div id="licensePreviewWrap" style="display:none">
+              <div class="csv-preview" id="licensePreview"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grata Upload -->
+        <div id="upload-grata" style="display:none">
+          <div class="upload-section" style="margin-top:14px;">
+            <div class="upload-section-title">Grata Export</div>
+            <div class="file-drop">
+              <input type="file" id="grataFile" accept=".csv,.xlsx,.xls" onchange="handleFileSelect('grataFile','grataFileName');readGrataFile()" />
+              <div class="file-drop-icon">📊</div>
+              <div class="file-drop-text">Drop the Grata CSV export here</div>
+              <div class="file-drop-hint">Export directly from Grata as CSV</div>
+              <div class="file-name" id="grataFileName"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cowork Upload -->
+        <div id="upload-cowork" style="display:none">
+          <div class="upload-section" style="margin-top:14px;">
+            <div class="upload-section-title">Cowork / Manual Research CSV</div>
+            <div class="file-drop">
+              <input type="file" id="coworkFile" accept=".csv,.xlsx,.xls" onchange="handleFileSelect('coworkFile','coworkFileName');readCoworkFile()" />
+              <div class="file-drop-icon">📝</div>
+              <div class="file-drop-text">Drop your research CSV here</div>
+              <div class="file-drop-hint">Must include at minimum: Company Name, City</div>
+              <div class="file-name" id="coworkFileName"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+          <button class="btn btn-primary" onclick="runStep3()">Parse All Files →</button>
+          <button class="btn btn-ghost" onclick="skipStep(2,3)">Skip →</button>
+        </div>
+
+        <div id="resp2" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Parsed Companies</span>
+            <span class="badge badge-idle" id="badge2">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody2"></div>
+        </div>
+      </div>
+
+      <!-- STEP 4: Filter -->
+      <div class="step-panel" id="panel3">
+        <div class="step-header">
+          <span class="step-tag">Step 04</span>
+          <h2 class="step-title">Apply Filter</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Every company gets <strong style="color:var(--green)">TRUE</strong> or <strong style="color:var(--red)">FALSE</strong>. TRUE requires all three: confirmed bootstrapped, employee range 20–200, headquartered in your geography. <strong>FALSE companies are kept</strong> — you need to see the PE landscape.</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px;">
+          <div style="background:rgba(74,158,110,0.06);border:1px solid rgba(74,158,110,0.2);padding:16px 18px;">
+            <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px;">✓ TRUE — All three required</div>
+            <div style="font-size:12px;color:var(--white3);line-height:1.7;">Confirmed bootstrapped / independently owned<br>Employee range overlaps 20–200<br>Headquartered in your geography</div>
+          </div>
+          <div style="background:rgba(192,85,85,0.06);border:1px solid rgba(192,85,85,0.2);padding:16px 18px;">
+            <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:8px;">✗ FALSE — Any one fails</div>
+            <div style="font-size:12px;color:var(--white3);line-height:1.7;">PE-backed, national, or franchise<br>Under 20 employees<br>Ownership unverified<br>Wrong geography</div>
+          </div>
+        </div>
+
+        <label style="margin-top:22px;">Additional Filter Notes <span style="color:var(--white4);font-weight:300;">(optional)</span></label>
+        <textarea id="filterNotes" rows="3" placeholder="Any custom rules — e.g. exclude companies under 5 years old…"></textarea>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+          <button class="btn btn-primary" onclick="runStep4()">Apply Filter →</button>
+        </div>
+
+        <div id="resp3" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Filtered Results</span>
+            <span class="badge badge-idle" id="badge3">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody3"></div>
+        </div>
+
+        <div id="filterTableWrap" style="display:none;margin-top:22px;">
+          <div class="section-title">
+            Results
+            <span class="count-badge" id="trueCount">0 TRUE</span>
+            <span class="count-badge" id="falseCount">0 FALSE</span>
+          </div>
+          <div class="csv-preview">
+            <table class="data-table" id="filterTable">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="export-bar">
+            <div class="export-bar-label">Export full filtered company list to Excel</div>
+            <button class="btn btn-primary" onclick="exportToExcel()">⬇ Export Excel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 5: Decision Makers -->
+      <div class="step-panel" id="panel4">
+        <div class="step-header">
+          <span class="step-tag">Step 05</span>
+          <h2 class="step-title">Decision Makers</h2>
+        </div>
+        <div class="panel-intro">
+          <p>Finds CEO/owner contact info for all TRUE companies automatically — one at a time, saving after every company. Pass 1 checks website, LinkedIn, and Google. Pass 2 runs automatically for any not found. Just click and walk away.</p>
+        </div>
+
+        <div class="btn-row" style="margin-top:4px;">
+          <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
+          <button class="btn btn-primary" onclick="runPass1()">Run Decision Maker Search →</button>
+        </div>
+
+        <div id="resp4a" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Pass 1 — Quick Sweep</span>
+            <span class="badge badge-idle" id="badge4a">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody4a"></div>
+        </div>
+
+        <div class="gold-rule"></div>
+
+        <div class="section-title" style="color:var(--white2);font-size:16px;">Pass 2 — Escalation <span style="color:var(--white4);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:300;margin-left:6px;">runs automatically after Pass 1</span></div>
+
+        <div id="resp4b" class="response-box" style="display:none">
+          <div class="response-header">
+            <span class="response-label">Pass 2 — Deep Search</span>
+            <span class="badge badge-idle" id="badge4b">Waiting</span>
+          </div>
+          <div class="response-body" id="respBody4b"></div>
+        </div>
+
+        <div class="export-bar" style="margin-top:22px;">
+          <div class="export-bar-label">Export Decision Maker Contacts to Excel</div>
+          <button class="btn btn-primary" onclick="exportContacts()">⬇ Export Contacts</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let state = {
+  apiKey: '',
+  industry: '',
+  geography: '',
+  industryNotes: '',
+  sources: { license: false, grata: false, cowork: false },
+  licenseCSV: '',
+  grataCSV: '',
+  coworkCSV: '',
+  licenseResults: '',
+  grataResults: '',
+  coworkResults: '',
+  companyList: [],
+  contactResults: '',
+  escalatedCompanies: '',
+  conversationHistory: [],
+};
+
+const PROXY = 'https://acquisition-target-builder.vercel.app/api/proxy';
+
+// ─── NAV ──────────────────────────────────────────────────────────────────────
+const stepTitles = [
+  ['Industry & Geography', 'Step 01 of 05'],
+  ['Data Sources', 'Step 02 of 05'],
+  ['Upload & Parse', 'Step 03 of 05'],
+  ['Apply Filter', 'Step 04 of 05'],
+  ['Decision Makers', 'Step 05 of 05'],
+];
+
+function goToStep(n) {
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.step-nav-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('panel' + n).classList.add('active');
+  document.getElementById('nav' + n).classList.add('active');
+  document.getElementById('topbarTitle').textContent = stepTitles[n][0];
+  document.getElementById('topbarTag').textContent = stepTitles[n][1];
+  window.scrollTo(0, 0);
+}
+
+function markDone(n) {
+  const el = document.getElementById('nav' + n);
+  el.classList.remove('active');
+  el.classList.add('done');
+  el.querySelector('.step-num').textContent = '✓';
+}
+
+function skipStep(current, next) { markDone(current); goToStep(next); }
+
+// ─── API KEY ──────────────────────────────────────────────────────────────────
+function saveKey() {
+  state.apiKey = document.getElementById('apiKey').value.trim();
+  if (state.apiKey) {
+    document.getElementById('apiKey').style.borderColor = 'var(--green)';
+    document.getElementById('apiKey').style.background = 'rgba(74,158,110,0.08)';
+  }
+}
+
+// ─── FILE HANDLING ────────────────────────────────────────────────────────────
+function handleFileSelect(inputId, labelId) {
+  const files = document.getElementById(inputId).files;
+  if (files.length > 0) document.getElementById(labelId).textContent = Array.from(files).map(f => f.name).join(', ');
+}
+
+function readCSVFile(file, callback) {
+  const r = new FileReader();
+  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+    r.onload = e => {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      callback(XLSX.utils.sheet_to_csv(ws));
+    };
+    r.readAsArrayBuffer(file);
+  } else {
+    r.onload = e => callback(e.target.result);
+    r.readAsText(file);
+  }
+}
+
+function readLicenseFile() {
+  const file = document.getElementById('licenseFile').files[0];
+  if (!file) return;
+  readCSVFile(file, csv => {
+    state.licenseCSV = csv;
+    const lines = csv.split('\n').filter(l => l.trim());
+    const rows = lines.slice(0, 5).map(l => l.split(','));
+    let html = '<table class="data-table"><thead><tr>' + (rows[0]||[]).map(h=>`<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+    rows.slice(1).forEach(row => { html += '<tr>' + row.map(c=>`<td>${c}</td>`).join('') + '</tr>'; });
+    html += '</tbody></table>';
+    document.getElementById('licensePreview').innerHTML = html;
+    document.getElementById('licensePreviewWrap').style.display = 'block';
+  });
+}
+
+function readGrataFile() {
+  const file = document.getElementById('grataFile').files[0];
+  if (!file) return;
+  readCSVFile(file, csv => { state.grataCSV = csv; });
+}
+
+function readCoworkFile() {
+  const file = document.getElementById('coworkFile').files[0];
+  if (!file) return;
+  readCSVFile(file, csv => { state.coworkCSV = csv; });
+}
+
+// ─── CONTINUE TO UPLOAD ───────────────────────────────────────────────────────
+function continueToUpload() {
+  if (state.sources.cowork) {
+    // Generate and show Cowork prompt
+    const prompt = `I am building an acquisition target list for a search fund.
+
+Industry: ${state.industry || '[Industry]'}
+Geography: ${state.geography || '[Geography]'}
+
+Please search the web and find as many independently owned ${state.industry || '[Industry]'} companies in ${state.geography || '[Geography]'} as possible.
+
+For each company find:
+- Company Name
+- City
+- Website
+- Estimated employee count (if available)
+- Any ownership signals (independent, family owned, franchise, PE-backed)
+- Phone number (if available)
+
+Rules:
+- Do NOT include national chains (e.g. Johnson Controls, Tyco, SimplexGrinnell, ADT, etc.)
+- Do NOT include PE-backed rollups
+- Focus on locally owned, independent operators
+- Search Google Maps, Yelp, BBB, LinkedIn, and any state directories you can find
+
+When done, export your findings as a CSV with these exact columns:
+Company_Name,City,Website,Employee_Estimate,Ownership_Signal,Phone
+
+Save the CSV and return it to me so I can upload it.`;
+
+    document.getElementById('coworkPromptText').textContent = prompt;
+    document.getElementById('coworkPromptBox').style.display = 'block';
+    document.getElementById('coworkPromptBox').scrollIntoView({ behavior: 'smooth' });
+  } else {
+    goToStep(2);
+  }
+}
+
+function copyCoworkPrompt() {
+  const text = document.getElementById('coworkPromptText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+
+// ─── SOURCE TOGGLES ───────────────────────────────────────────────────────────
+function toggleSource(src) {
+  const cb = document.getElementById('src-' + src);
+  const card = document.getElementById('card-' + src);
+  const upload = document.getElementById('upload-' + src);
+  // Toggle checkbox if card was clicked (not checkbox itself)
+  if (event.target !== cb) cb.checked = !cb.checked;
+  state.sources[src] = cb.checked;
+  card.classList.toggle('selected', cb.checked);
+  if (upload) upload.style.display = cb.checked ? 'block' : 'none';
+}
+
+// ─── STATUS ───────────────────────────────────────────────────────────────────
+function setStatus(type, text) {
+  const el = document.getElementById('topbarStatus');
+  el.className = 'badge badge-' + type;
+  el.textContent = text;
+}
+
+function setBadge(id, type, html) {
+  const el = document.getElementById(id);
+  el.className = 'badge badge-' + type;
+  el.innerHTML = html;
+}
+
+function loading(id) { return '<span class="dots"><span>.</span><span>.</span><span>.</span></span>'; }
+
+// ─── API CALL ─────────────────────────────────────────────────────────────────
+async function callAPI(prompt, systemPrompt, useWebSearch = false) {
+  const body = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: prompt }],
+  };
+  if (useWebSearch) body.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+
+  const resp = await fetch(PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if (data.error) {
+    const msg = data.error.message || '';
+    if (msg.includes('rate limit')) throw new Error('rate limit');
+    if (msg.includes('credit') || msg.includes('balance')) throw new Error('credit');
+    throw new Error(msg);
+  }
+  return data.content.map(b => b.text || '').join('');
+}
+
+async function callAPIWithDisplay(prompt, systemPrompt, badgeId, bodyId, respBoxId, useWebSearch = false) {
+  document.getElementById(respBoxId).style.display = 'block';
+  setBadge(badgeId, 'loading', loading());
+  setStatus('loading', 'Running…');
+  document.getElementById(bodyId).textContent = '';
+  try {
+    const result = await callAPI(prompt, systemPrompt, useWebSearch);
+    document.getElementById(bodyId).textContent = result;
+    setBadge(badgeId, 'done', '✓ Done');
+    setStatus('done', 'Complete');
+    return result;
+  } catch (err) {
+    document.getElementById(bodyId).textContent = 'Error: ' + err.message;
+    setBadge(badgeId, 'error', '✗ Error');
+    setStatus('idle', 'Idle');
+    return null;
+  }
+}
+
+function buildSystem() {
+  return `You are a research assistant helping build an acquisition target list for Ironclad Growth Partners, a search fund.
+Industry: ${state.industry}
+Geography: ${state.geography}
+Focus: bootstrapped, independently owned companies with 20-200 employees.`;
+}
+
+// ─── STEP 1 ───────────────────────────────────────────────────────────────────
+async function runStep1() {
+  state.industry = document.getElementById('industryName').value.trim();
+  state.geography = document.getElementById('geography').value.trim();
+  state.industryNotes = document.getElementById('industryNotes').value.trim();
+  if (!state.industry) { alert('Please enter an industry name.'); return; }
+  if (!state.geography) { alert('Please enter a geography.'); return; }
+
+  const prompt = `I am building an acquisition target list for a search fund.
+Industry: ${state.industry}
+Geography: ${state.geography}
+
+Research notes:
+${state.industryNotes || '(No additional notes — proceed with general knowledge.)'}
+
+Please confirm you understand:
+- What this industry does and how it is regulated
+- Sub-categories within it
+- What recurring revenue looks like vs one-time work
+- Typical license types companies hold
+- Any geography-specific regulatory context
+
+Do not start searching yet. Confirm your understanding and note anything unclear.`;
+
+  const result = await callAPIWithDisplay(prompt, buildSystem(), 'badge0', 'respBody0', 'resp0');
+  if (result) { markDone(0); setTimeout(() => goToStep(1), 600); }
+}
+
+// ─── STEP 2: Check License DB ─────────────────────────────────────────────────
+async function checkLicenseDB() {
+  const prompt = `Does ${state.geography} have a public license database for ${state.industry} companies?
+
+If yes:
+- What is the exact agency or URL?
+- Can I download a CSV or PDF directly?
+- What fields does it include?
+- If login or phone request required: who do I contact, what exact language do I use, what law covers this?
+
+If no official list exists, say so clearly.`;
+
+  await callAPIWithDisplay(prompt, buildSystem(), 'badge1a', 'respBody1a', 'resp1a');
+}
+
+// ─── STEP 3: Parse Files ──────────────────────────────────────────────────────
+function parseGrataCSV(csv) {
+  const lines = csv.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return { companies: [], contacts: [] };
+
+  // Parse CSV respecting quoted fields
+  function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQuotes = !inQuotes; }
+      else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+      else { current += line[i]; }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  const headers = parseCSVLine(lines[0]);
+  const companies = [];
+  const contacts = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCSVLine(lines[i]);
+    const row = Object.fromEntries(headers.map((h, j) => [h, (vals[j] || '').trim()]));
+
+    const name = row['Name'] || '';
+    const hq = row['Headquarters'] || row['Mailing Address'] || '';
+    const city = hq.split(',')[0].trim();
+    const employees = row['Employee Estimate'] || row['Employees on Professional Networks'] || '';
+    const ownership = row['Ownership'] || '';
+    const domain = row['Domain'] || '';
+    const phone = row['Primary Phone'] || '';
+    const email = row['Primary Email'] || '';
+
+    if (!name) continue;
+
+    companies.push([
+      name, city, 'Grata', '', employees, ownership, ''
+    ]);
+
+    // Extract executive info if present
+    const firstName = row['Executive First Name'] || '';
+    const lastName = row['Executive Last Name'] || '';
+    const title = row['Executive Title'] || '';
+    const execEmail = row['Executive Email'] || '';
+    const execLinkedIn = row['Executive Linkedin'] || '';
+
+    contacts.push({
+      company: name,
+      city,
+      firstName,
+      lastName,
+      title,
+      email: execEmail || email,
+      linkedin: execLinkedIn,
+      domain,
+      phone,
+      ownership,
+      employees,
+    });
+  }
+
+  return { companies, contacts };
+}
+
+async function runStep3() {
+  const hasAny = state.licenseCSV || state.grataCSV || state.coworkCSV;
+  if (!hasAny) { alert('Please upload at least one file.'); return; }
+
+  document.getElementById('resp2').style.display = 'block';
+  setBadge('badge2', 'loading', loading());
+  setStatus('loading', 'Parsing files…');
+  document.getElementById('respBody2').textContent = 'Starting parse…';
+
+  let allResults = 'Company_Name,City,Source,License_Number,Employee_Signals,Ownership_Signal,Notes\n';
+
+  // ── Handle Grata directly (no Claude needed) ──────────────────────────────
+  if (state.grataCSV) {
+    document.getElementById('respBody2').textContent = 'Parsing Grata export…';
+    const { companies, contacts } = parseGrataCSV(state.grataCSV);
+    companies.forEach(c => { allResults += c.join(',') + '\n'; });
+    // Store Grata contacts for pre-filling decision makers later
+    state.grataContacts = contacts;
+    document.getElementById('respBody2').textContent = `Grata: ${companies.length} companies parsed. `;
+  }
+
+  // ── Handle License List and Cowork via Claude ─────────────────────────────
+  const claudeFiles = [
+    { csv: state.licenseCSV, label: 'License List', key: 'licenseResults' },
+    { csv: state.coworkCSV, label: 'Cowork Research', key: 'coworkResults' },
+  ].filter(f => f.csv);
+
+  for (const file of claudeFiles) {
+    const rows = file.csv.split('\n').filter(l => l.trim());
+    const header = rows[0];
+    const dataRows = rows.slice(1);
+    const BATCH = 80;
+
+    for (let i = 0; i < dataRows.length; i += BATCH) {
+      const end = Math.min(i + BATCH, dataRows.length);
+      const batchNum = Math.floor(i / BATCH) + 1;
+      document.getElementById('respBody2').textContent = `Parsing ${file.label} — batch ${batchNum} (rows ${i+1}–${end})…`;
+
+      const prompt = `Parse this ${file.label} and extract companies in ${state.geography} for ${state.industry}.
+
+\`\`\`
+${[header, ...dataRows.slice(i, i+BATCH)].join('\n')}
+\`\`\`
+
+Return ONLY CSV, no extra text:
+Company_Name,City,Source,License_Number,Employee_Signals,Ownership_Signal,Notes
+
+Source = "${file.label}". Flag nationals/PE in Ownership_Signal.`;
+
+      let success = false;
+      while (!success) {
+        try {
+          const result = await callAPI(prompt, buildSystem());
+          const lines = result.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('company_name'));
+          allResults += lines.join('\n') + '\n';
+          state[file.key] = allResults;
+          success = true;
+        } catch (err) {
+          if (err.message.includes('rate limit')) {
+            document.getElementById('respBody2').textContent = `Rate limit — waiting 61s…`;
+            await new Promise(r => setTimeout(r, 61000));
+          } else if (err.message.includes('credit')) {
+            document.getElementById('respBody2').textContent = `Out of credits — add credits at console.anthropic.com.`;
+            setBadge('badge2', 'error', '✗ Out of credits');
+            return;
+          } else { success = true; }
+        }
+      }
+
+      if (i + BATCH < dataRows.length) await new Promise(r => setTimeout(r, 61000));
+    }
+  }
+
+  state.licenseResults = allResults;
+  document.getElementById('respBody2').textContent = allResults;
+  setBadge('badge2', 'done', '✓ Done');
+  setStatus('done', 'Complete');
+  markDone(2);
+  setTimeout(() => goToStep(3), 800);
+}
+
+// ─── STEP 4: Filter ───────────────────────────────────────────────────────────
+async function runStep4() {
+  const filterNotes = document.getElementById('filterNotes').value.trim();
+  const allData = state.licenseResults || '';
+  if (!allData) { alert('No company data found. Please complete Step 3 first.'); return; }
+
+  document.getElementById('resp3').style.display = 'block';
+  setBadge('badge3', 'loading', loading());
+  setStatus('loading', 'Filtering…');
+  document.getElementById('respBody3').textContent = 'Starting filter…';
+
+  const allLines = allData.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('company_name'));
+  const BATCH = 20;
+  let allResults = 'Company_Name,City,Source,Employee_Range,Ownership_Type,TRUE_or_FALSE,Filter_Reason,Notes\n';
+
+  for (let i = 0; i < allLines.length; i += BATCH) {
+    const end = Math.min(i + BATCH, allLines.length);
+    const batchNum = Math.floor(i / BATCH) + 1;
+    const totalBatches = Math.ceil(allLines.length / BATCH);
+    document.getElementById('respBody3').textContent = `Filtering batch ${batchNum} of ${totalBatches} (${i+1}–${end} of ${allLines.length} companies)…`;
+
+    const prompt = `Apply the ironclad filter to these companies.
+
+${allLines.slice(i, i+BATCH).join('\n')}
+
+Geography: ${state.geography}
+
+TRUE = ALL three pass:
+1. Confirmed bootstrapped / independently owned
+2. Employee range overlaps 20–200
+3. Headquartered in ${state.geography}
+
+FALSE = any one fails.
+Ownership: BOOTSTRAPPED, PE-BACKED, NATIONAL, or FRANCHISE
+${filterNotes ? 'Extra rules: ' + filterNotes : ''}
+
+Return ONLY CSV, no extra text:
+Company_Name,City,Source,Employee_Range,Ownership_Type,TRUE_or_FALSE,Filter_Reason,Notes`;
+
+    let success = false;
+    while (!success) {
+      try {
+        const result = await callAPI(prompt, buildSystem());
+        const lines = result.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('company_name'));
+        allResults += lines.join('\n') + '\n';
+        success = true;
+      } catch (err) {
+        if (err.message.includes('rate limit')) {
+          document.getElementById('respBody3').textContent = `Rate limit on batch ${batchNum} — waiting 61s…`;
+          await new Promise(r => setTimeout(r, 61000));
+        } else if (err.message.includes('credit')) {
+          document.getElementById('respBody3').textContent = `Out of credits — add credits at console.anthropic.com.`;
+          setBadge('badge3', 'error', '✗ Out of credits');
+          return;
+        } else { success = true; }
+      }
+    }
+
+    if (i + BATCH < allLines.length) {
+      await new Promise(r => setTimeout(r, 61000));
+    }
+  }
+
+  document.getElementById('respBody3').textContent = allResults;
+  setBadge('badge3', 'done', '✓ Done');
+  setStatus('done', 'Complete');
+  markDone(3);
+  parseFilterResult(allResults);
+  setTimeout(() => goToStep(4), 1000);
+}
+
+function parseFilterResult(csvText) {
+  const lines = csvText.split('\n').filter(l => l.trim() && l.includes(','));
+  if (lines.length < 2) return;
+  const headers = lines[0].split(',');
+  const rows = lines.slice(1).map(l => l.split(','));
+  let trueCount = 0, falseCount = 0;
+
+  document.getElementById('filterTable').querySelector('thead').innerHTML =
+    '<tr>' + headers.map(h => `<th>${h.trim()}</th>`).join('') + '</tr>';
+
+  document.getElementById('filterTable').querySelector('tbody').innerHTML = rows.map(row => {
+    const isTrue = row.some(c => c.trim() === 'TRUE');
+    const isFalse = row.some(c => c.trim() === 'FALSE');
+    if (isTrue) trueCount++;
+    if (isFalse) falseCount++;
+    return '<tr>' + row.map(c => {
+      const v = c.trim();
+      let cls = '';
+      if (v === 'TRUE') cls = 'tag-true';
+      if (v === 'FALSE') cls = 'tag-false';
+      if (v === 'BOOTSTRAPPED') cls = 'tag-bootstrap';
+      if (v === 'PE-BACKED') cls = 'tag-pe';
+      if (v === 'NATIONAL') cls = 'tag-national';
+      if (v === 'FRANCHISE') cls = 'tag-franchise';
+      return `<td class="${cls}">${v}</td>`;
+    }).join('') + '</tr>';
+  }).join('');
+
+  document.getElementById('trueCount').textContent = trueCount + ' TRUE';
+  document.getElementById('falseCount').textContent = falseCount + ' FALSE';
+  document.getElementById('filterTableWrap').style.display = 'block';
+  state.companyList = rows.map(r => Object.fromEntries(headers.map((h,i) => [h.trim(), (r[i]||'').trim()])));
+}
+
+// ─── STEP 5: Pass 1 ──────────────────────────────────────────────────────────
+async function runPass1() {
+  if (!state.companyList || state.companyList.length === 0) {
+    alert('No filtered companies found. Please complete Step 4 first.');
+    return;
+  }
+
+  const trueCompanies = state.companyList.filter(c => (c.TRUE_or_FALSE || '').trim() === 'TRUE');
+  if (trueCompanies.length === 0) {
+    alert('No TRUE companies found. Please complete Step 4 first.');
+    return;
+  }
+
+  const companyLines = trueCompanies.map(c => c.Company_Name + (c.City ? ' — ' + c.City : ''));
+
+  document.getElementById('resp4a').style.display = 'block';
+  setBadge('badge4a', 'loading', loading());
+  setStatus('loading', 'Pass 1 running…');
+
+  let allResults = 'TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary\n';
+
+  // Build Grata contact lookup — use Grata data first, no tokens needed
+  const grataLookup = {};
+  if (state.grataContacts) {
+    state.grataContacts.forEach(c => { grataLookup[c.company.toLowerCase()] = c; });
+  }
+
+  for (let i = 0; i < companyLines.length; i++) {
+    const company = companyLines[i].trim();
+    document.getElementById('respBody4a').textContent = `Company ${i+1} of ${companyLines.length}: ${company}…\n\n${allResults}`;
+
+    const companyName = company.split('—')[0].trim();
+
+    // Check Grata first — free, no tokens
+    const grataContact = grataLookup[companyName.toLowerCase()];
+    if (grataContact && grataContact.firstName) {
+      allResults += `TRUE,${grataContact.firstName},${grataContact.lastName},${grataContact.email},${grataContact.linkedin},${companyName},${grataContact.domain},${grataContact.phone},Found in Grata\n`;
+      state.contactResults = allResults;
+      document.getElementById('respBody4a').textContent = `Company ${i+1} of ${companyLines.length}: ${companyName} — ✓ Found in Grata\n\n${allResults}`;
+      await new Promise(r => setTimeout(r, 200));
+      continue;
+    }
+
+    // Not in Grata — ONE quick search, take first result, move on immediately
+    const prompt = `OUTPUT FORMAT: One CSV row only. No prose. No explanation.
+
+Find owner/CEO of: ${companyName} (${state.geography})
+Do ONE search only. Take first clear result. If not obvious, stop.
+
+Output one line:
+TRUE,[First],[Last],[Email],[LinkedIn],[${companyName}],[domain],[phone],[source or ESCALATE]
+
+ONLY the CSV row.`;
+
+    const body = {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 100,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      system: 'You are a CSV tool. One search max. Output only one CSV row, nothing else.',
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    let success = false;
+    while (!success) {
+      try {
+        const resp = await fetch(PROXY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await resp.json();
+        if (data.error) { const msg = data.error.message||''; if(msg.includes('rate limit')) throw new Error('rate limit'); if(msg.includes('credit')||msg.includes('balance')) throw new Error('credit'); throw new Error(msg); }
+        const result = data.content.map(b => b.text||'').join('');
+        // Only accept lines that start with TRUE or FALSE — reject any prose
+        const lines = result.split('\n').filter(l => {
+          const t = l.trim();
+          return (t.startsWith('TRUE') || t.startsWith('FALSE')) && t.includes(',');
+        });
+        if (lines.length > 0) {
+          allResults += lines[0] + '\n';
+        } else {
+          // Claude returned prose — mark as ESCALATE
+          allResults += `TRUE,,,,,${companyName},,,ESCALATE\n`;
+        }
+        state.contactResults = allResults;
+        success = true;
+      } catch (err) {
+        if (err.message.includes('rate limit')) {
+          document.getElementById('respBody4a').textContent = `Rate limit on company ${i+1} — saved ${i} results, waiting 61s…\n\n${allResults}`;
+          await new Promise(r => setTimeout(r, 61000));
+        } else if (err.message.includes('credit')) {
+          document.getElementById('respBody4a').textContent = `Out of credits.\n\nSaved so far:\n${allResults}`;
+          setBadge('badge4a', 'error', '✗ Out of credits');
+          state.contactResults = allResults;
+          return;
+        } else {
+          allResults += `TRUE,,,,,${company},,,Error: ${err.message}\n`;
+          state.contactResults = allResults;
+          success = true;
+        }
+      }
+    }
+
+    if (i + 1 < companyLines.length) await new Promise(r => setTimeout(r, 3000));
+  }
+
+  document.getElementById('respBody4a').textContent = allResults;
+  setBadge('badge4a', 'done', '✓ Done');
+  state.contactResults = allResults;
+
+  // Extract escalated
+  const escalatedLines = allResults.split('\n').filter(l => l.toUpperCase().includes('ESCALAT'));
+  const escalatedNames = escalatedLines.map(l => { const p = l.split(','); return p[5] ? p[5].trim() : p[0].trim(); }).filter(n => n);
+  state.escalatedCompanies = escalatedNames.join('\n');
+  markDone(4);
+
+  if (escalatedNames.length > 0) {
+    await runPass2();
+  } else {
+    document.getElementById('resp4b').style.display = 'block';
+    document.getElementById('respBody4b').textContent = 'No escalated companies — Pass 2 not needed.';
+    setBadge('badge4b', 'done', '✓ Done');
+    setStatus('done', 'Complete');
+  }
+}
+
+// ─── STEP 5: Pass 2 ──────────────────────────────────────────────────────────
+async function runPass2() {
+  const escalated = state.escalatedCompanies || '';
+  if (!escalated) return;
+
+  document.getElementById('resp4b').style.display = 'block';
+  setBadge('badge4b', 'loading', loading());
+  setStatus('loading', 'Pass 2 running…');
+
+  const companyLines = escalated.split('\n').filter(l => l.trim());
+  let allResults = 'TRUE_or_FALSE,CEO_First_Name,CEO_Last_Name,CEO_Email,CEO_LinkedIn_URL,Company_Name,Company_Domain,Company_Phone,Commentary\n';
+
+  for (let i = 0; i < companyLines.length; i++) {
+    const company = companyLines[i].trim();
+    document.getElementById('respBody4b').textContent = `Company ${i+1} of ${companyLines.length}: ${company}…\n\n${allResults}`;
+
+    const prompt = `OUTPUT FORMAT: One CSV row only. No prose. No explanation.
+
+Quick search for owner/CEO of: ${company} (${state.geography})
+Do max 2 searches: try Secretary of State registry first, then one Google search.
+Stop immediately after 2 searches regardless of result.
+
+Output one line:
+TRUE,[First],[Last],[Email],[LinkedIn],[${company}],[domain],[phone],[source or Not found]
+
+ONLY the CSV row.`;
+
+    const body = {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 100,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      system: 'You are a CSV tool. Max 2 searches. Output only one CSV row, nothing else.',
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    let success = false;
+    while (!success) {
+      try {
+        const resp = await fetch(PROXY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await resp.json();
+        if (data.error) { const msg = data.error.message||''; if(msg.includes('rate limit')) throw new Error('rate limit'); if(msg.includes('credit')||msg.includes('balance')) throw new Error('credit'); throw new Error(msg); }
+        const result = data.content.map(b => b.text||'').join('');
+        const lines = result.split('\n').filter(l => {
+          const t = l.trim();
+          return (t.startsWith('TRUE') || t.startsWith('FALSE')) && t.includes(',');
+        });
+        if (lines.length > 0) {
+          allResults += lines[0] + '\n';
+        } else {
+          allResults += `TRUE,,,,,${company},,,Not found\n`;
+        }
+        success = true;
+      } catch (err) {
+        if (err.message.includes('rate limit')) {
+          document.getElementById('respBody4b').textContent = `Rate limit on company ${i+1} — waiting 61s…\n\n${allResults}`;
+          await new Promise(r => setTimeout(r, 61000));
+        } else if (err.message.includes('credit')) {
+          document.getElementById('respBody4b').textContent = `Out of credits.\n\nSaved so far:\n${allResults}`;
+          setBadge('badge4b', 'error', '✗ Out of credits');
+          return;
+        } else {
+          allResults += `TRUE,,,,,${company},,,Not found\n`;
+          success = true;
+        }
+      }
+    }
+
+    if (i + 1 < companyLines.length) await new Promise(r => setTimeout(r, 3000));
+  }
+
+  document.getElementById('respBody4b').textContent = allResults;
+  setBadge('badge4b', 'done', '✓ Done');
+  setStatus('done', 'Complete');
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function csvToArray(csvText) {
+  const lines = csvText.split('\n').filter(l => l.trim() && l.includes(','));
+  if (!lines.length) return [];
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(l => {
+    const vals = l.split(',');
+    return Object.fromEntries(headers.map((h,i) => [h, (vals[i]||'').trim()]));
+  });
+}
+
+function exportToExcel() {
+  const csvText = document.getElementById('respBody3').textContent;
+  if (!csvText) { alert('Run Step 4 first.'); return; }
+  const rows = csvToArray(csvText);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Target List');
+  XLSX.writeFile(wb, `target_list_${state.industry.replace(/\s+/g,'_')}_${state.geography.split(',')[0].replace(/\s+/g,'_')}.xlsx`);
+}
+
+function exportContacts() {
+  const pass1 = state.contactResults || '';
+  const pass2 = document.getElementById('respBody4b').textContent || '';
+  if (!pass1) { alert('Run Decision Maker Search first.'); return; }
+  const pass2Lines = pass2.split('\n').filter(l => l.trim() && l.includes(',') && !l.toLowerCase().startsWith('true_or_false'));
+  const combined = pass1.trimEnd() + (pass2Lines.length ? '\n' + pass2Lines.join('\n') : '');
+  const rows = csvToArray(combined);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Decision Makers');
+  XLSX.writeFile(wb, `decision_makers_${state.industry.replace(/\s+/g,'_')}.xlsx`);
+}
+
+// ─── DRAG DROP ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.file-drop').forEach(drop => {
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('drag-over');
+    const input = drop.querySelector('input[type="file"]');
+    if (input && e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      input.dispatchEvent(new Event('change'));
+    }
+  });
+});
+</script>
+</body>
+</html>
